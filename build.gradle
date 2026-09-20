@@ -41,5 +41,25 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // The benchmark is a report, not a check: it is slow by design and its
+        // result is a number rather than a pass. Keeping it out of `test` keeps
+        // the build fast and keeps a loaded CI machine from failing it.
+        excludeTags 'benchmark'
+    }
+}
+
+tasks.register('benchmark', Test) {
+    description = 'Measures parallel GitHub enrichment against a slow local server.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'benchmark'
+    }
+    // Always rerun: a cached timing measurement is not a measurement.
+    outputs.upToDateWhen { false }
+    testLogging {
+        showStandardStreams = true
+    }
 }

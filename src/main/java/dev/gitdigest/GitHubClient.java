@@ -23,7 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * Link headers instead of guessing page numbers, and it stops and explains
  * itself when the rate limit is gone rather than hammering a closed door.
  */
-public class GitHubClient implements AutoCloseable {
+public class GitHubClient implements PullRequestSource, AutoCloseable {
 
     private static final String API = "https://api.github.com";
     private static final Duration TIMEOUT = Duration.ofSeconds(20);
@@ -33,12 +33,22 @@ public class GitHubClient implements AutoCloseable {
     private final HttpClient http;
     private final HttpCache cache;
     private final String token;
+    private final String baseUrl;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public GitHubClient(HttpClient http, HttpCache cache, String token) {
+        this(http, cache, token, API);
+    }
+
+    /**
+     * @param baseUrl where the API lives, so a test can point the client at a
+     *                local server instead of the internet
+     */
+    public GitHubClient(HttpClient http, HttpCache cache, String token, String baseUrl) {
         this.http = http;
         this.cache = cache;
         this.token = token;
+        this.baseUrl = baseUrl;
     }
 
     /** Reads the token from GITHUB_TOKEN, so it is never written down in code. */
@@ -58,6 +68,7 @@ public class GitHubClient implements AutoCloseable {
         return new GitHubClient(http, cache, token == null || token.isBlank() ? null : token);
     }
 
+    @Override
     public boolean isAuthenticated() {
         return token != null;
     }
@@ -68,8 +79,9 @@ public class GitHubClient implements AutoCloseable {
      * <p>Usually one, occasionally none - a commit pushed straight to a branch
      * belongs to no pull request at all, which is not an error.
      */
+    @Override
     public List<PullRequest> pullRequestsForCommit(GitHubRepo repo, String sha) {
-        String url = API + "/repos/" + repo.owner() + "/" + repo.name() + "/commits/" + sha + "/pulls";
+        String url = baseUrl + "/repos/" + repo.owner() + "/" + repo.name() + "/commits/" + sha + "/pulls";
         List<PullRequest> found = new ArrayList<>();
         for (JsonNode node : getArray(url)) {
             found.add(toPullRequest(node));

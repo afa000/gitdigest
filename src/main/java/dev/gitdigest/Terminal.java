@@ -37,6 +37,21 @@ public final class Terminal {
         return console != null && console.isTerminal();
     }
 
+    /**
+     * True when this run has a human watching, best effort.
+     *
+     * <p>Used to decide whether a progress counter should animate. The check is
+     * the same one colour uses, and it is approximate for the same reason: the
+     * JDK will say whether a console is attached, but not which of the three
+     * standard streams is still pointed at it. Erring towards "not a terminal"
+     * costs an animation; erring the other way writes carriage returns into
+     * someone's log file.
+     */
+    public static boolean isInteractive() {
+        Console console = System.console();
+        return console != null && console.isTerminal();
+    }
+
     public static Ansi ansi() {
         return supportsColor() ? Ansi.ON : Ansi.OFF;
     }

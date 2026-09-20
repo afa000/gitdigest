@@ -54,6 +54,13 @@ public class ChangelogCommand implements Callable<Integer> {
     boolean useGitHub;
 
     @Option(
+            names = "--jobs",
+            paramLabel = "<n>",
+            description = "How many GitHub lookups to run at once with --github. "
+                    + "Default: ${DEFAULT-VALUE}. Use 1 for one at a time.")
+    int jobs = ChangelogEnricher.DEFAULT_JOBS;
+
+    @Option(
             names = "--format",
             paramLabel = "<format>",
             description = "Output format: ${COMPLETION-CANDIDATES}. Default: ${DEFAULT-VALUE}.")
@@ -72,13 +79,17 @@ public class ChangelogCommand implements Callable<Integer> {
             return changelog;
         }
         try (GitHubClient client = GitHubClient.fromEnvironment()) {
-            return new ChangelogEnricher(client, repo.get(), System.err).enrich(changelog);
+            return new ChangelogEnricher(client, repo.get(), System.err, jobs).enrich(changelog);
         }
     }
 
     @Override
     public Integer call() {
         Path where = repoPath.toAbsolutePath().normalize();
+        if (jobs < 1) {
+            System.err.println("gitdigest: --jobs must be at least 1.");
+            return 2;
+        }
         try {
             List<CommitInfo> commits = new RepoReader().readRange(repoPath, fromRef, toRef);
             List<CommitInfo> selected = new CommitFilter(null, null, author).apply(commits);

@@ -47,6 +47,7 @@ The launcher lands in `build\install\gitdigest\bin\`. To run without installing:
 | `--from <rev>` | `changelog` | Start of the range, **excluded** — a tag, branch or hash |
 | `--to <rev>` | `changelog` | End of the range, included (default `HEAD`) |
 | `--github` | `changelog` | Look up each commit's pull request on GitHub |
+| `--jobs <n>` | `changelog` | How many of those lookups to run at once (default `8`) |
 
 `--from` is exclusive and `--to` is inclusive, matching `git log from..to`, so
 `--from v1.0 --to v2.0` describes what changed *after* v1.0 shipped.
@@ -63,6 +64,33 @@ In `--format markdown` the number becomes a link. It is off by default because
 it costs one GitHub request per commit. If GitHub is unreachable, the remote is
 not on GitHub, or the rate limit runs out, the changelog still prints without
 the extra data.
+
+## Speed
+
+Those lookups are almost entirely spent waiting on a socket, so they run in
+parallel on virtual threads — one task per commit, with a semaphore capping how
+many are in flight and a token bucket smoothing the burst.
+
+```
+40 commits, 200ms latency
+  --jobs 1    8.5s
+  --jobs 8    2.4s
+  speedup     3.6x
+```
+
+Measured by `.\gradlew benchmark`, which runs the real client against a local
+server that answers at a realistic latency. Both runs use the same code path;
+only `--jobs` differs.
+
+The ceiling is not the thread count. GitHub publishes a secondary limit of 900
+points a minute for the REST API, and a read costs one point, so the pacer holds
+the tool to 15 requests a second no matter how many threads are asking. Past
+about nine commits that is what bounds the run — which is the right answer, not
+a disappointing one. `--jobs 1` restores the old one-at-a-time behaviour.
+
+Nothing here stretches the *hourly* quota, and the tool does not pretend
+otherwise: when the allowance is gone it says so once, stops asking, keeps the
+pull requests it already fetched, and prints the changelog anyway.
 
 ## Scripting
 
@@ -82,4 +110,4 @@ unknown revision; `2` when the arguments themselves do not parse.
 
 ## Tech
 
-Java 25 (LTS) · Gradle · picocli · JGit · Jackson · GitHub REST API · Claude API
+Java 25 (LTS) · Gradle · picocli · JGit · Jackson · virtual threads · GitHub REST API · Claude API
