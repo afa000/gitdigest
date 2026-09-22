@@ -1,7 +1,11 @@
 package dev.gitdigest;
 
 import java.io.Console;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 import picocli.CommandLine.Help.Ansi;
 
@@ -54,6 +58,22 @@ public final class Terminal {
 
     public static Ansi ansi() {
         return supportsColor() ? Ansi.ON : Ansi.OFF;
+    }
+
+    /**
+     * Standard output, as UTF-8, whatever the JVM thinks the console is.
+     *
+     * <p>Same Windows problem as {@link #barCharacter()}, from the other end.
+     * A redirected stdout reports Cp1252, so anything outside it - an em dash,
+     * a curly quote, an accented name - is written as "?" and the file is
+     * quietly wrong. Rendering our own tables, that is avoidable by choosing
+     * ASCII; for prose written by a model, or a contributor's name, it is not.
+     *
+     * <p>Only the streams carrying text we did not choose need this. The
+     * caller keeps ownership of System.out and must not close the wrapper.
+     */
+    public static PrintStream utf8Out() {
+        return new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
     }
 
     /**

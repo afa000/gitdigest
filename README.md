@@ -8,10 +8,13 @@ and AI-written release notes.
 - **JDK 25**
 - **`GITHUB_TOKEN`** — optional, and only used by `--github`. Without one you get
   GitHub's unauthenticated allowance of 60 requests an hour; with one, 5000.
+- **`ANTHROPIC_API_KEY`** — optional, and only used by `notes`. Without one the
+  release notes are assembled from the commits instead of written by Claude.
 
 ```
 # PowerShell
 $env:GITHUB_TOKEN = "ghp_..."
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
 ```
 
 ## Install
@@ -32,7 +35,7 @@ The launcher lands in `build\install\gitdigest\bin\`. To run without installing:
 |---|---|
 | `gitdigest stats <repo>` | Commits per author, the busiest files, and activity by day and hour |
 | `gitdigest changelog <repo>` | Commits between two revisions, grouped by type |
-| `gitdigest notes <repo>` | AI-written release notes — not implemented yet |
+| `gitdigest notes <repo>` | Release notes for a commit range, written by Claude |
 
 `<repo>` defaults to the current directory. Every command takes `--help`.
 
@@ -46,7 +49,9 @@ The launcher lands in `build\install\gitdigest\bin\`. To run without installing:
 | `--until <YYYY-MM-DD>` | `stats` | Only commits on or before this date, inclusive |
 | `--from <rev>` | `changelog` | Start of the range, **excluded** — a tag, branch or hash |
 | `--to <rev>` | `changelog` | End of the range, included (default `HEAD`) |
-| `--github` | `changelog` | Look up each commit's pull request on GitHub |
+| `--github` | `changelog`, `notes` | Look up each commit's pull request on GitHub |
+| `--tone formal\|casual` | `notes` | Voice to write in (default `formal`) |
+| `--offline` | `notes` | Assemble the notes locally instead of calling Claude |
 | `--jobs <n>` | `changelog` | How many of those lookups to run at once (default `8`) |
 
 `--from` is exclusive and `--to` is inclusive, matching `git log from..to`, so
@@ -92,6 +97,34 @@ Nothing here stretches the *hourly* quota, and the tool does not pretend
 otherwise: when the allowance is gone it says so once, stops asking, keeps the
 pull requests it already fetched, and prints the changelog anyway.
 
+## Release notes
+
+```
+gitdigest notes . --from v1.0 --to v2.0 --github
+```
+
+Claude is given the commit subjects, the pull request titles and the
+contributors, and writes the notes back as Markdown — streamed into the
+terminal a fragment at a time rather than appearing all at once at the end.
+`--tone casual` asks for a warmer voice; the rules that keep the notes truthful
+apply either way.
+
+**It works without an API key.** With no credentials configured, or with
+`--offline`, the same data is assembled into notes locally: grouped, breaking
+changes first, contributors credited, pull requests linked. Duller, complete,
+free. The tool says which of the two you got.
+
+If the call fails before any text arrives, it falls back to that local writer
+and you still get a whole page. If it fails *partway*, it does not — a second
+set of notes printed underneath the first half of another would be worse than
+the truth, so it says the output is incomplete and exits non-zero.
+
+Notes go to stdout and everything else to stderr, so this writes a clean file:
+
+```
+gitdigest notes . --from v1.0 > RELEASE_NOTES.md
+```
+
 ## Scripting
 
 `--format json` makes the output machine-readable, and warnings go to stderr so
@@ -110,4 +143,4 @@ unknown revision; `2` when the arguments themselves do not parse.
 
 ## Tech
 
-Java 25 (LTS) · Gradle · picocli · JGit · Jackson · virtual threads · GitHub REST API · Claude API
+Java 25 (LTS) · Gradle · picocli · JGit · Jackson · virtual threads · GitHub REST API · Anthropic Java SDK

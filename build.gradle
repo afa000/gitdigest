@@ -14,10 +14,14 @@ dependencies {
     implementation 'org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
+    implementation 'com.anthropic:anthropic-java:2.34.0'
 
-    // JGit logs through SLF4J. Without a binding it prints a startup warning
-    // to stderr on every run; the no-op binding keeps the CLI output clean.
-    runtimeOnly 'org.slf4j:slf4j-nop:1.7.36'
+    // JGit and the Anthropic SDK both log through SLF4J. Without a binding
+    // they print a startup warning to stderr on every run; the no-op binding
+    // keeps the CLI output clean. Pinned to 2.x to match the slf4j-api the
+    // Anthropic SDK brings in - a 1.7.x binding is ignored by a 2.x api and
+    // the warning comes back, louder.
+    runtimeOnly 'org.slf4j:slf4j-nop:2.0.16'
 
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
