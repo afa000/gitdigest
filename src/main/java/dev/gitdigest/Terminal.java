@@ -1,8 +1,6 @@
 package dev.gitdigest;
 
 import java.io.Console;
-import java.io.FileDescriptor;
-import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -71,9 +69,15 @@ public final class Terminal {
      *
      * <p>Only the streams carrying text we did not choose need this. The
      * caller keeps ownership of System.out and must not close the wrapper.
+     *
+     * <p>Wrapping System.out rather than opening the file descriptor directly
+     * matters twice over. The outer stream encodes to UTF-8 bytes and the
+     * inner one passes bytes through untouched, so the encoding is fixed
+     * either way - but going to the descriptor would bypass System.setOut,
+     * which is both how a test reads this output and how a caller redirects it.
      */
     public static PrintStream utf8Out() {
-        return new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8);
+        return new PrintStream(System.out, true, StandardCharsets.UTF_8);
     }
 
     /**

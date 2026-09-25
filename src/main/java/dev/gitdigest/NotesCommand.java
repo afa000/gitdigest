@@ -90,8 +90,10 @@ public class NotesCommand implements Callable<Integer> {
             }
             return writeNotes(changelog);
         } catch (NoHeadException e) {
+            // Consistent with an empty range, a few lines above, which already
+            // exits 0: there is nothing to write about either way.
             System.err.println("gitdigest: repository has no commits yet: " + where);
-            return 1;
+            return 0;
         } catch (IllegalArgumentException e) {
             System.err.println("gitdigest: " + e.getMessage());
             return 1;

@@ -1,0 +1,11 @@
+Changelog v1.0..HEAD - 4 changes
+
+Features
+  25186d4  BREAKING api: drop the deprecated v1 endpoints (Grace Hopper)
+
+Bug Fixes
+  d2ce74a  cli: report the right exit code on a bad path (Ada Lovelace)
+
+Other
+  6a8067b  explain the --jobs flag (Ada Lovelace)
+  54c629a  bump the gradle wrapper (Ada Lovelace)

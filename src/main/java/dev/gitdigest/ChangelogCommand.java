@@ -100,8 +100,13 @@ public class ChangelogCommand implements Callable<Integer> {
             ChangelogRenderer.forFormat(format).print(changelog, System.out);
             return 0;
         } catch (NoHeadException e) {
+            // Empty, not broken - the same call stats makes, and the contract
+            // the README states for the whole tool. An empty changelog is a
+            // true answer about a repository with nothing in it.
             System.err.println("gitdigest: repository has no commits yet: " + where);
-            return 1;
+            ChangelogRenderer.forFormat(format)
+                    .print(new ChangelogBuilder().build(List.of(), fromRef, toRef), System.out);
+            return 0;
         } catch (IllegalArgumentException e) {
             // Raised by RepoReader when --from or --to names nothing that exists.
             System.err.println("gitdigest: " + e.getMessage());

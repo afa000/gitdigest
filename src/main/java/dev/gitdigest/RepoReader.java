@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.LogCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.NoHeadException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.diff.DiffFormatter;
 import org.eclipse.jgit.lib.ObjectId;
@@ -65,6 +66,16 @@ public class RepoReader {
         try (Git git = Git.open(repoPath.toFile());
                 RevWalk revWalk = new RevWalk(git.getRepository());
                 DiffFormatter diffFormatter = new DiffFormatter(DisabledOutputStream.INSTANCE)) {
+
+            // Checked before anything is resolved, so that a repository with no
+            // commits reports what is actually wrong with it. Left to itself,
+            // "HEAD" resolves to null here and comes back as "unknown revision:
+            // HEAD" - which reads as a typo the user made, about a revision
+            // they never typed. log() raises this on its own when no range is
+            // given; doing it here makes every path agree.
+            if (git.getRepository().resolve("HEAD") == null) {
+                throw new NoHeadException("repository has no commits yet");
+            }
 
             // The formatter computes diffs; DisabledOutputStream throws away the
             // patch text, because we only ever want the list of paths.

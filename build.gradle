@@ -23,6 +23,12 @@ dependencies {
     // the warning comes back, louder.
     runtimeOnly 'org.slf4j:slf4j-nop:2.0.16'
 
+    // WireMock over a hand-rolled HttpServer for the GitHub client: these
+    // tests are about request/response *sequences* - a 200 carrying an ETag
+    // followed by a conditional request that must come back 304 - and about
+    // asserting what was sent, not just what came back.
+    testImplementation 'org.wiremock:wiremock:3.9.1'
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
@@ -45,6 +51,10 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 test {
+    // Gradle does not forward -D to the test JVM, so the golden-file update
+    // switch would silently do nothing without this.
+    systemProperty 'golden.update', System.getProperty('golden.update') ?: 'false'
+
     useJUnitPlatform {
         // The benchmark is a report, not a check: it is slow by design and its
         // result is a number rather than a pass. Keeping it out of `test` keeps
