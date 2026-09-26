@@ -1,5 +1,7 @@
 # GitDigest
 
+[![build](https://github.com/afa000/gitdigest/actions/workflows/build.yml/badge.svg)](https://github.com/afa000/gitdigest/actions/workflows/build.yml)
+
 A command-line tool that turns any Git repository into statistics, changelogs,
 and AI-written release notes.
 
@@ -19,14 +21,33 @@ $env:ANTHROPIC_API_KEY = "sk-ant-..."
 
 ## Install
 
-```
-.\gradlew installDist
-```
-
-The launcher lands in `build\install\gitdigest\bin\`. To run without installing:
+Download `gitdigest-<version>.jar` from the
+[latest release](https://github.com/afa000/gitdigest/releases/latest) and run it:
 
 ```
+java -jar gitdigest.jar stats .
+```
+
+That is the whole install. The jar bundles its dependencies, so there is
+nothing else to fetch, and it needs **Java 25** - the same version the build
+targets. On an older JVM it fails with `UnsupportedClassVersionError` before it
+can print anything more helpful, which is a property of the JVM rather than a
+choice.
+
+### From source
+
+```
+.\gradlew shadowJar          # build\dist\gitdigest-<version>.jar
+.\gradlew installDist        # launcher scripts in build\install\gitdigest
 .\gradlew run --args="stats ."
+```
+
+The `installDist` launchers read `JAVA_HOME`, so point it at a JDK 25 if your
+default is older:
+
+```
+# PowerShell
+$env:JAVA_HOME = "C:\Program Files\Java\jdk-25.0.2"
 ```
 
 ## Commands
@@ -140,6 +161,17 @@ plain text. `NO_COLOR` is honoured.
 Exit codes: `0` on success — including a repository with no commits, which is
 empty rather than broken; `1` with a one-line message on a bad path or an
 unknown revision; `2` when the arguments themselves do not parse.
+
+## Releases
+
+Versions follow [semantic versioning](https://semver.org). Pushing a tag
+`vX.Y.Z` builds the jar, runs the whole suite, checks that the tag agrees with
+the version the binary reports, and attaches the jar to a GitHub Release.
+
+The release notes on that page are written by GitDigest itself, from the
+commits between the previous tag and this one - in `--offline` mode, so that
+shipping a release never depends on an API key or on a model being reachable.
+That is the fallback from the `notes` command earning its keep.
 
 ## Tech
 

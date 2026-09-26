@@ -260,5 +260,19 @@ class CommandTest {
 
         assertEquals(0, result.exitCode());
         assertTrue(result.out().contains("gitdigest"), result.out());
+        assertFalse(result.out().contains("unknown"),
+                "the version resource the build generates should be on the classpath: " + result.out());
+    }
+
+    @Test
+    void whatTheToolPrintsAboutItselfIsAscii() {
+        // Text we choose, unlike a model's prose or a contributor's name, so
+        // the cheap fix is available: stay inside ASCII and it cannot be
+        // mangled by whatever charset stdout reports when redirected.
+        for (String args : new String[] {"", "--version"}) {
+            String out = args.isEmpty() ? run().out() : run(args).out();
+            assertTrue(out.chars().allMatch(c -> c < 128),
+                    "non-ASCII in output that does not need it: " + out);
+        }
     }
 }

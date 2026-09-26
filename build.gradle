@@ -1,5 +1,8 @@
 plugins {
     id 'application'
+    // The maintained fork; the old com.github.johnrengelman.shadow is
+    // unmaintained and does not work on Gradle 9.
+    id 'com.gradleup.shadow' version '9.2.2'
 }
 
 group = 'dev.gitdigest'
@@ -45,6 +48,58 @@ java {
 application {
     mainClass = 'dev.gitdigest.GitDigest'
 }
+
+/*
+ * The version lives in exactly one place: the `version` property above.
+ *
+ * It used to be written out three times - here, in the @Command annotation,
+ * and in the line the bare command prints - which is a promise that someone
+ * will eventually tag a release whose binary reports the previous version.
+ * Generating it into a resource means `gitdigest --version` cannot disagree
+ * with the build that produced it.
+ */
+def generateVersionResource = tasks.register('generateVersionResource') {
+    def outputDirectory = layout.buildDirectory.dir('generated/resources/version')
+    def buildVersion = providers.provider { project.version.toString() }
+    inputs.property('version', buildVersion)
+    outputs.dir(outputDirectory)
+    doLast {
+        def file = outputDirectory.get().file('dev/gitdigest/version.properties').asFile
+        file.parentFile.mkdirs()
+        file.text = "version=" + buildVersion.get() + System.lineSeparator()
+    }
+}
+
+sourceSets.main.resources.srcDir(generateVersionResource)
+
+tasks.named('shadowJar') {
+    // No classifier, so the artifact attached to a release is plainly the
+    // thing you run: gitdigest-1.0.0.jar, not gitdigest-1.0.0-all.jar.
+    archiveClassifier.set('')
+    archiveBaseName.set('gitdigest')
+    // ...which means it would otherwise be written to exactly the path the
+    // ordinary jar occupies, and every task that reads build/libs - the start
+    // scripts, the distributions - would start consuming it without declaring
+    // that it does. Gradle 9 fails the build over that rather than guessing an
+    // order, and it is right to. A separate directory keeps the clean file
+    // name without the collision.
+    destinationDirectory.set(layout.buildDirectory.dir('dist'))
+    // Signature files from signed dependencies do not survive being merged
+    // into a new jar, and a JVM refuses to load classes whose signatures no
+    // longer match.
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+    manifest {
+        attributes(
+                'Implementation-Title': 'gitdigest',
+                'Implementation-Version': project.version)
+    }
+}
+
+// So `build` produces the runnable artifact rather than only the thin jar.
+tasks.named('assemble') {
+    dependsOn tasks.named('shadowJar')
+}
+
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'

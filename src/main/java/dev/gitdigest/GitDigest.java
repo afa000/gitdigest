@@ -8,14 +8,14 @@ import picocli.CommandLine.Command;
 @Command(
         name = "gitdigest",
         mixinStandardHelpOptions = true,
-        version = "gitdigest 0.1.0",
+        versionProvider = Version.class,
         description = "Git analytics, changelogs, and AI release notes from your terminal.",
         subcommands = {StatsCommand.class, ChangelogCommand.class, NotesCommand.class})
 public class GitDigest implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        System.out.println("gitdigest 0.1.0 — run with --help to see available options");
+        System.out.println("gitdigest " + Version.current() + " - run with --help to see available options");
         return 0;
     }
 
