@@ -2,6 +2,8 @@
 
 [![build](https://github.com/afa000/gitdigest/actions/workflows/build.yml/badge.svg)](https://github.com/afa000/gitdigest/actions/workflows/build.yml)
 
+![gitdigest running stats, changelog and notes](demo.gif)
+
 A command-line tool that reads any Git repository and tells you what happened
 in it: who has been working where, what changed between two releases, and a set
 of release notes written from that history. Point it at a repository and it
@@ -31,7 +33,7 @@ Activity by day
   SUN  ################      635
 ```
 
-A demo recording lives in [`demo.tape`](demo.tape) - see [Demo](#demo).
+The recording at the top is made by [`demo.tape`](demo.tape) - see [Demo](#demo).
 
 ## Requirements
 
@@ -226,14 +228,19 @@ That is the fallback from the `notes` command earning its keep.
 that records `demo.gif`:
 
 ```
-scoop install vhs
+winget install charmbracelet.vhs
+winget install tsl0922.ttyd
+winget install Gyan.FFmpeg
 vhs demo.tape
 ```
 
-It records against a full clone of a real project rather than this repository,
-whose own history is too short to be worth watching, and it uses `--offline` for
-the notes - a demo that needs an API key is a demo that breaks when the key
-does.
+Run it from a folder holding full clones of picocli and this repository.
+`stats` runs on picocli, whose thousands of commits are worth watching;
+`changelog` and `notes` run on this repository, because its commits follow the
+conventional format they group by and picocli's do not. The notes use
+`--offline` - a demo that needs an API key is a demo that breaks when the key
+does. The top of `demo.tape` covers setup, and a workaround for vhs 0.12 with
+ffmpeg 9, which records the frames but writes no GIF.
 
 ## Built alongside
 

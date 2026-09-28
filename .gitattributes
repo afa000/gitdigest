@@ -11,3 +11,4 @@ gradlew.bat  text eol=crlf
 src/test/resources/golden/** text eol=lf
 
 *.jar binary
+*.gif binary
