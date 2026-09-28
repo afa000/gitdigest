@@ -76,6 +76,7 @@ public class RepoReader {
             if (git.getRepository().resolve("HEAD") == null) {
                 throw new NoHeadException("repository has no commits yet");
             }
+            rejectPartialClone(git.getRepository());
 
             // The formatter computes diffs; DisabledOutputStream throws away the
             // patch text, because we only ever want the list of paths.
@@ -102,6 +103,35 @@ public class RepoReader {
         try (Git git = Git.open(repoPath.toFile())) {
             String url = git.getRepository().getConfig().getString("remote", "origin", "url");
             return Optional.ofNullable(url).filter(value -> !value.isBlank());
+        }
+    }
+
+    /**
+     * Refuses a partial clone, before it fails confusingly.
+     *
+     * <p>A clone made with {@code --filter=blob:none} has the commit graph but
+     * not the file contents, and working out which files a commit touched means
+     * reading those contents. JGit gets several frames into a diff before
+     * discovering they are absent, and surfaces it as "Error while parsing
+     * attributes" - which names neither the cause nor anything the user could
+     * do about it.
+     *
+     * <p>Found by running the tool against a real repository, which is the only
+     * place this comes up: nobody makes a partial clone of a small project.
+     */
+    private static void rejectPartialClone(Repository repository) {
+        for (String remote : repository.getRemoteNames()) {
+            String filter = repository.getConfig().getString("remote", remote, "partialclonefilter");
+            if (filter != null && !filter.isBlank()) {
+                throw new IllegalArgumentException(
+                        "this is a partial clone (filter: " + filter + "), so the file contents needed to "
+                                + "work out what each commit changed are not on disk."
+                                + System.lineSeparator()
+                                // Unset first: --refetch on its own re-applies
+                                // the configured filter and fetches no blobs.
+                                + "  Clone again without --filter, or run: git config --unset remote." + remote
+                                + ".partialclonefilter && git fetch --refetch " + remote);
+            }
         }
     }
 

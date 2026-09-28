@@ -125,6 +125,9 @@ public class StatsPrinter implements StatsRenderer {
         return values.stream().mapToLong(Long::longValue).max().orElse(1);
     }
 
+    /** Reads as "there is more to the left of this", in plain ASCII. */
+    private static final String ELIDED = "...";
+
     /**
      * Shortens an over-long label to {@code width}.
      *
@@ -137,7 +140,36 @@ public class StatsPrinter implements StatsRenderer {
             return text;
         }
         return isPath
-                ? "~" + text.substring(text.length() - (width - 1))
-                : text.substring(0, width - 1) + "~";
+                ? elidePath(text, width)
+                : text.substring(0, width - ELIDED.length()) + ELIDED;
+    }
+
+    /**
+     * Drops leading directories, whole ones at a time.
+     *
+     * <p>Cutting a path at whatever character the width lands on produces
+     * labels like "rc/main/resources/styles.css" - a path that does not exist,
+     * out of a word that has been sliced in half. Keeping whole segments means
+     * every label is a real suffix of a real path, which is what makes a
+     * column of them comparable at a glance.
+     */
+    private static String elidePath(String path, int width) {
+        String[] segments = path.split("/");
+        String kept = "";
+        // The separator stays after the ellipsis: ".../main/..." cannot be
+        // misread as a cut word the way "...main/..." can.
+        String prefix = ELIDED + "/";
+        for (int i = segments.length - 1; i >= 0; i--) {
+            String candidate = kept.isEmpty() ? segments[i] : segments[i] + "/" + kept;
+            if (prefix.length() + candidate.length() > width) {
+                break;
+            }
+            kept = candidate;
+        }
+        // A single file name longer than the column has no segment boundary
+        // left to cut on, so it falls back to slicing characters.
+        return kept.isEmpty()
+                ? ELIDED + path.substring(path.length() - (width - ELIDED.length()))
+                : prefix + kept;
     }
 }

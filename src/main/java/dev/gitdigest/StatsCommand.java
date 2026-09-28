@@ -64,6 +64,14 @@ public class StatsCommand implements Callable<Integer> {
             // stats and exit 0, the way `wc -l` succeeds on an empty file.
             StatsRenderer.forFormat(format).print(new StatsCalculator().calculate(List.of()), System.out);
             return 0;
+        } catch (IllegalArgumentException e) {
+            // Raised by RepoReader for a repository it can describe the problem
+            // with - a partial clone, say. The other two commands already
+            // handle this; without it here the message still reaches the user,
+            // but through the catch-all handler, which appends an offer of a
+            // stack trace to something that is not a crash.
+            System.err.println("gitdigest: " + e.getMessage());
+            return 1;
         } catch (RepositoryNotFoundException e) {
             // Must be caught before IOException: it is a subclass of one.
             System.err.println("gitdigest: not a git repository: " + where);

@@ -37,6 +37,10 @@ class CommandTest {
     }
 
     private Run run(String... args) {
+        return runCommand(new GitDigest(), args);
+    }
+
+    private Run runCommand(Object command, String... args) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
@@ -44,13 +48,11 @@ class CommandTest {
         try {
             System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
             System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
-            int code = new CommandLine(new GitDigest())
-                    .setCaseInsensitiveEnumValuesAllowed(true)
-                    // Matching main(): without it picocli's AUTO mode colours
-                    // help text, and the harness would be testing something
-                    // the real entry point never produces.
-                    .setColorScheme(CommandLine.Help.defaultColorScheme(CommandLine.Help.Ansi.OFF))
-                    .execute(args);
+            // Configured by the same method main() uses, with colour off as it
+            // is whenever stdout is not a terminal.
+            // Built only after the redirect: picocli captures System.out when
+            // a CommandLine is constructed, not when it prints.
+            int code = GitDigest.configure(new CommandLine(command), CommandLine.Help.Ansi.OFF).execute(args);
             return new Run(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
         } finally {
             // Restored in a finally block: a test that throws while stdout is
@@ -240,6 +242,61 @@ class CommandTest {
         try (TestRepo repo = history()) {
             assertEquals(2, run("changelog", repo(), "--jobs", "0").exitCode());
         }
+    }
+
+    // --- real-world repositories, which are not all ordinary clones -------
+
+    @Test
+    void aPartialCloneIsRefusedWithAnActionableMessageByEveryCommand() throws Exception {
+        // Found by running the tool against picocli's history. A clone made
+        // with --filter=blob:none has the commits but not the file contents,
+        // and JGit gets several frames into a diff before noticing, then
+        // reports "Error while parsing attributes" - which names neither the
+        // cause nor anything the user could do.
+        try (TestRepo repo = history()) {
+            repo.git().getRepository().getConfig()
+                    .setString("remote", "origin", "partialclonefilter", "blob:none");
+            repo.git().getRepository().getConfig().save();
+
+            for (String[] args : new String[][] {
+                    {"stats", repo()}, {"changelog", repo()}, {"notes", repo(), "--offline"}}) {
+                Run result = run(args);
+
+                assertEquals(1, result.exitCode(), args[0]);
+                assertTrue(result.err().contains("partial clone"), args[0] + ": " + result.err());
+                assertTrue(result.err().contains("--filter"), args[0] + ": " + result.err());
+                // --refetch alone re-applies the filter, so the advice has to
+                // unset it first or following it changes nothing.
+                assertTrue(result.err().contains("git config --unset remote.origin.partialclonefilter"),
+                        args[0] + ": " + result.err());
+                assertFalse(result.err().contains("stack trace"),
+                        args[0] + " treated an actionable message as a crash: " + result.err());
+                assertFalse(result.err().contains("org.eclipse.jgit"),
+                        args[0] + " leaked a stack trace: " + result.err());
+            }
+        }
+    }
+
+    /** Stands in for a library failing somewhere nobody anticipated. */
+    @CommandLine.Command(name = "boom")
+    static class Boom implements java.util.concurrent.Callable<Integer> {
+        @Override
+        public Integer call() {
+            throw new IllegalStateException("the library gave up");
+        }
+    }
+
+    @Test
+    void anUnexpectedFailureIsOneLineNotAStackTrace() {
+        // The commands catch what they expect; this is the net under the rest.
+        // A library throwing from four frames down should not print a Java
+        // stack trace at someone who typed a command.
+        Run result = runCommand(new Boom());
+
+        assertEquals(1, result.exitCode());
+        assertFalse(result.err().contains("\tat "), "a stack trace reached the user: " + result.err());
+        assertTrue(result.err().startsWith("gitdigest: the library gave up"), result.err());
+        assertTrue(result.err().contains("GITDIGEST_DEBUG"), result.err());
     }
 
     // --- help and version, which are part of the interface ----------------

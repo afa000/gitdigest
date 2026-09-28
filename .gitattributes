@@ -1,0 +1,13 @@
+# The wrapper scripts break if their line endings are rewritten: a CRLF in
+# gradlew makes the shebang unparseable on Linux and macOS, and an LF-only
+# .bat misbehaves on some Windows shells. Pin both rather than trusting
+# whatever core.autocrlf each contributor happens to have set.
+gradlew      text eol=lf
+gradlew.bat  text eol=crlf
+
+# Golden files are compared after normalising line endings, so this is not
+# load-bearing - but pinning them means a diff shows a real change to the
+# output rather than a checkout artefact.
+src/test/resources/golden/** text eol=lf
+
+*.jar binary

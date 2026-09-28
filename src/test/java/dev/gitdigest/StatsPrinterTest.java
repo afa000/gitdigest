@@ -63,9 +63,34 @@ class StatsPrinterTest {
 
         String line = lineContaining(render(stats), "Indeed.java");
 
-        // elided from the front, so the identifying end survives
-        assertTrue(line.contains("~"), line);
+        // Elided from the front, so the identifying end survives.
+        assertTrue(line.contains("..."), line);
         assertTrue(line.contains("AVeryLongClassNameIndeed.java"), line);
+    }
+
+    @Test
+    void anElidedPathIsStillARealPath() {
+        // Cutting on character count lands mid-directory and produces a label
+        // like "rc/main/resources/..." - a path that does not exist, made out
+        // of a word sliced in half. Whole segments keep every label a true
+        // suffix of a true path, which is what makes the column comparable.
+        RepoStats stats = new RepoStats(
+                1,
+                Map.of("Alice", 1L),
+                Map.of("flexbuddy/src/main/resources/static/css/styles.css", 1L),
+                Map.of(DayOfWeek.MONDAY, 1L),
+                Map.of(9, 1L));
+
+        String line = lineContaining(render(stats), "styles.css");
+        String label = line.trim().split("\\s{2,}")[0];
+
+        assertTrue(label.startsWith(".../"), label);
+        String remainder = label.substring(4);
+        assertTrue("flexbuddy/src/main/resources/static/css/styles.css".endsWith(remainder),
+                "elided label should be a suffix of the real path, got: " + remainder);
+        assertTrue(remainder.startsWith("resources/") || remainder.startsWith("static/")
+                        || remainder.startsWith("css/") || remainder.startsWith("main/"),
+                "should have been cut at a separator, got: " + remainder);
     }
 
     @Test

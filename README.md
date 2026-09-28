@@ -2,8 +2,36 @@
 
 [![build](https://github.com/afa000/gitdigest/actions/workflows/build.yml/badge.svg)](https://github.com/afa000/gitdigest/actions/workflows/build.yml)
 
-A command-line tool that turns any Git repository into statistics, changelogs,
-and AI-written release notes.
+A command-line tool that reads any Git repository and tells you what happened
+in it: who has been working where, what changed between two releases, and a set
+of release notes written from that history. Point it at a repository and it
+answers in under a second, offline, with no configuration. Give it a GitHub
+token and it enriches the changelog with the pull request each commit arrived
+through; give it an Anthropic key and it writes the release notes as prose
+instead of a list. Neither is required, and it says which one you got.
+
+```
+$ gitdigest stats ~/code/picocli
+Repository stats - 4731 commits
+
+Commits per author
+  Remko Popma                ####################  2895
+  rpopma                     #####                 790
+  dependabot[bot]            #                     279
+  Andreas Deininger          #                     134
+  NewbieOrange               #                     134
+
+Activity by day
+  MON  ###################   721
+  TUE  ###################   721
+  WED  ####################  758
+  THU  #################     682
+  FRI  ###############       595
+  SAT  ################      619
+  SUN  ################      635
+```
+
+A demo recording lives in [`demo.tape`](demo.tape) - see [Demo](#demo).
 
 ## Requirements
 
@@ -25,7 +53,7 @@ Download `gitdigest-<version>.jar` from the
 [latest release](https://github.com/afa000/gitdigest/releases/latest) and run it:
 
 ```
-java -jar gitdigest.jar stats .
+java -jar gitdigest-1.0.0.jar stats .
 ```
 
 That is the whole install. The jar bundles its dependencies, so there is
@@ -77,6 +105,25 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-25.0.2"
 
 `--from` is exclusive and `--to` is inclusive, matching `git log from..to`, so
 `--from v1.0 --to v2.0` describes what changed *after* v1.0 shipped.
+
+```
+$ gitdigest changelog .
+Changelog HEAD - 5 changes
+
+Features
+  9d68ed9  notes: write release notes with Claude (aflo692)
+  29d0bd1  changelog: fetch pull requests in parallel (aflo692)
+
+Other
+  ea2620c  ship a runnable jar, and build it in CI (aflo692)
+  9affb5d  cover the git layer, the commands, and the wire (aflo692)
+  0359939  a Git analytics and changelog CLI (aflo692)
+```
+
+Grouping reads [conventional commit](https://www.conventionalcommits.org)
+prefixes - `feat:`, `fix:`, a trailing `!` for breaking. On a project that does
+not use them every commit lands under "Other", which is accurate rather than
+useful; `stats` does not care either way.
 
 `--github` adds the pull request each commit arrived through, using its title in
 place of the commit subject:
@@ -172,6 +219,29 @@ The release notes on that page are written by GitDigest itself, from the
 commits between the previous tag and this one - in `--offline` mode, so that
 shipping a release never depends on an API key or on a model being reachable.
 That is the fallback from the `notes` command earning its keep.
+
+## Demo
+
+[`demo.tape`](demo.tape) is a [vhs](https://github.com/charmbracelet/vhs) script
+that records `demo.gif`:
+
+```
+scoop install vhs
+vhs demo.tape
+```
+
+It records against a full clone of a real project rather than this repository,
+whose own history is too short to be worth watching, and it uses `--offline` for
+the notes - a demo that needs an API key is a demo that breaks when the key
+does.
+
+## Built alongside
+
+[**FlexBuddy**](https://github.com/afa000/flexbuddy) is the other half of this
+pair: a Spring Boot shift-scheduling web app, where this is a command-line tool
+that consumes APIs rather than serving them. GitDigest reads FlexBuddy's history
+as one of its test subjects, which is a convenient way to find out that your
+analytics tool mangles long file paths.
 
 ## Tech
 
