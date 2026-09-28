@@ -34,7 +34,7 @@ Output demo.gif
 Set Shell powershell
 Set FontSize 15
 Set Width 1100
-Set Height 720
+Set Height 760
 Set Padding 18
 Set Theme "Catppuccin Mocha"
 # Typed slowly enough to read, which is the whole point of a terminal GIF.
@@ -47,9 +47,9 @@ Hide
 Type "[Console]::OutputEncoding = [Text.Encoding]::UTF8; $env:GITDIGEST_OPTS = '-Dstdout.encoding=UTF-8'; clear" Enter
 Show
 
-# The first 34 lines are the header, the authors and the top files; the
-# day and hour charts below them would push those off the screen.
-Type "gitdigest stats picocli --since 2024-01-01 | Select-Object -First 34"
+# The first 35 lines are the header, the top authors, the top files and the
+# days of the week; the hour chart below them would push those off the screen.
+Type "gitdigest stats picocli | Select-Object -First 35"
 Sleep 500ms
 Enter
 # Long enough to take in the bars without the viewer reaching for pause.
