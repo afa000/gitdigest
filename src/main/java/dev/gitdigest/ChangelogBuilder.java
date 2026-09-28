@@ -6,6 +6,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -23,6 +24,17 @@ public class ChangelogBuilder {
      */
     private static final Pattern CONVENTIONAL =
             Pattern.compile("^([a-zA-Z][a-zA-Z0-9]*)(?:[(]([^)]*)[)])?(!)?: +(.*)$");
+
+    /**
+     * The types the convention defines (the Angular set commitlint uses).
+     *
+     * <p>Without this, anything shaped like "word: text" is taken for a type,
+     * so "GitDigest: a Git analytics CLI" became "a Git analytics CLI" - the
+     * prefix that said what the commit was about, stripped as though it were
+     * syntax. A word the convention does not know is part of the subject.
+     */
+    private static final Set<String> KNOWN_TYPES = Set.of(
+            "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert");
 
     public Changelog build(List<CommitInfo> commits, String fromRef, String toRef) {
         Map<ChangeGroup, List<ChangelogEntry>> groups = new EnumMap<>(ChangeGroup.class);
@@ -45,7 +57,7 @@ public class ChangelogBuilder {
      */
     private static ChangelogEntry toEntry(CommitInfo commit) {
         Matcher matcher = CONVENTIONAL.matcher(commit.subject());
-        if (!matcher.matches()) {
+        if (!matcher.matches() || !KNOWN_TYPES.contains(matcher.group(1).toLowerCase(Locale.ROOT))) {
             return new ChangelogEntry(
                     commit.sha(), null, null, false, commit.subject(), commit.authorName(), null);
         }

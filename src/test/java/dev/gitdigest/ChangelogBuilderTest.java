@@ -89,6 +89,26 @@ class ChangelogBuilderTest {
     }
 
     @Test
+    void aPrefixTheConventionDoesNotKnowIsPartOfTheSubject() {
+        // Found in this repository's own first commit: "GitDigest:" is what
+        // the commit is about, not a type, and stripping it lost the subject.
+        ChangelogEntry entry = build(commit("GitDigest: a Git analytics CLI")).groups()
+                .get(ChangeGroup.OTHER).get(0);
+
+        assertNull(entry.type());
+        assertEquals("GitDigest: a Git analytics CLI", entry.description());
+    }
+
+    @Test
+    void knownPlumbingTypesAreStillParsed() {
+        ChangelogEntry entry = build(commit("chore(release): 1.0.0")).groups()
+                .get(ChangeGroup.OTHER).get(0);
+
+        assertEquals("chore", entry.type());
+        assertEquals("1.0.0", entry.description());
+    }
+
+    @Test
     void typeIsCaseInsensitive() {
         Changelog log = build(commit("FEAT: shouting"));
         assertEquals("feat", log.groups().get(ChangeGroup.FEATURES).get(0).type());
