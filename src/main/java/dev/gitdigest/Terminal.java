@@ -59,16 +59,30 @@ public final class Terminal {
     }
 
     /**
-     * Standard output, as UTF-8, whatever the JVM thinks the console is.
+     * Standard output for text we did not choose: a model's prose, or a
+     * contributor's name.
      *
-     * <p>Same Windows problem as {@link #barCharacter()}, from the other end.
-     * A redirected stdout reports Cp1252, so anything outside it - an em dash,
-     * a curly quote, an accented name - is written as "?" and the file is
-     * quietly wrong. Rendering our own tables, that is avoidable by choosing
-     * ASCII; for prose written by a model, or a contributor's name, it is not.
+     * <p>Redirected, it is UTF-8. Same Windows problem as
+     * {@link #barCharacter()}, from the other end: a redirected stdout reports
+     * Cp1252, so anything outside it - an em dash, a curly quote, an accented
+     * name - is written as "?" and the file is quietly wrong.
      *
-     * <p>Only the streams carrying text we did not choose need this. The
-     * caller keeps ownership of System.out and must not close the wrapper.
+     * <p>On a terminal, it is System.out untouched, which already encodes to
+     * whatever the console decodes. Forcing UTF-8 there is what went wrong
+     * first: a Windows console on code page 437 decoded each accented letter
+     * in a contributor's name as two box-drawing characters. Now a character
+     * the console has renders correctly, and one it lacks comes out as "?"
+     * rather than as noise.
+     *
+     * <p>The caller keeps ownership of System.out and must not close the result.
+     */
+    public static PrintStream textOut() {
+        return textOut(isInteractive());
+    }
+
+    /**
+     * The decision itself, separated so both branches can be tested without
+     * a terminal attached.
      *
      * <p>Wrapping System.out rather than opening the file descriptor directly
      * matters twice over. The outer stream encodes to UTF-8 bytes and the
@@ -76,8 +90,8 @@ public final class Terminal {
      * either way - but going to the descriptor would bypass System.setOut,
      * which is both how a test reads this output and how a caller redirects it.
      */
-    public static PrintStream utf8Out() {
-        return new PrintStream(System.out, true, StandardCharsets.UTF_8);
+    static PrintStream textOut(boolean interactive) {
+        return interactive ? System.out : new PrintStream(System.out, true, StandardCharsets.UTF_8);
     }
 
     /**

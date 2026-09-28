@@ -127,7 +127,7 @@ public class NotesCommand implements Callable<Integer> {
             return writeWithTemplate(changelog);
         }
 
-        PrintStream out = Terminal.utf8Out();
+        PrintStream out = Terminal.textOut();
         try (ClaudeNotesWriter writer = claude.get()) {
             writer.write(changelog, tone, out);
             System.err.println("gitdigest: notes " + writer.describe() + ".");
@@ -163,7 +163,7 @@ public class NotesCommand implements Callable<Integer> {
 
     private Integer writeWithTemplate(Changelog changelog) {
         ReleaseNotesWriter writer = new TemplateNotesWriter();
-        writer.write(changelog, tone, Terminal.utf8Out());
+        writer.write(changelog, tone, Terminal.textOut());
         System.err.println("gitdigest: notes " + writer.describe() + ".");
         return 0;
     }
