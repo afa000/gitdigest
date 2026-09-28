@@ -17,7 +17,17 @@ dependencies {
     implementation 'org.eclipse.jgit:org.eclipse.jgit:6.10.0.202406032230-r'
     implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.2'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
-    implementation 'com.anthropic:anthropic-java:2.34.0'
+    implementation('com.anthropic:anthropic-java:2.34.0') {
+        // The SDK talks HTTP through OkHttp; no class in the fat jar refers to
+        // Apache HttpClient 5 at all, yet it was 1.6 MB of it. The victools
+        // JSON-schema generator (and the swagger annotations it reads) serve
+        // only the structured-outputs helper, which this tool does not use.
+        // testJar runs the suite against the jar to prove nothing needed went.
+        exclude group: 'org.apache.httpcomponents.client5'
+        exclude group: 'org.apache.httpcomponents.core5'
+        exclude group: 'com.github.victools'
+        exclude group: 'io.swagger.core.v3'
+    }
 
     // JGit and the Anthropic SDK both log through SLF4J. Without a binding
     // they print a startup warning to stderr on every run; the no-op binding
@@ -116,6 +126,48 @@ test {
         // the build fast and keeps a loaded CI machine from failing it.
         excludeTags 'benchmark'
     }
+}
+
+/*
+ * The suite again, run against the jar users download instead of the compiled
+ * classes. `test` cannot notice a class that is missing from the fat jar: its
+ * classpath has every dependency whole. Trimming the jar - excluding a
+ * dependency, shrinking it - fails here, at build time, rather than as a
+ * NoClassDefFoundError on someone's first run.
+ *
+ * Only JUnit is added beside the jar. WireMock would bring its own Jackson and
+ * HTTP client back onto the classpath and hide exactly the gaps this exists to
+ * find, so the two WireMock-based GitHub tests are left to `test`. The Claude
+ * writer tests stay in: they stream from a plain JDK HttpServer, so they drive
+ * the SDK's real request, streaming and error paths out of the jar.
+ */
+configurations {
+    jarTestRuntime
+}
+
+dependencies {
+    jarTestRuntime platform('org.junit:junit-bom:5.10.2')
+    jarTestRuntime 'org.junit.jupiter:junit-jupiter'
+    jarTestRuntime 'org.junit.platform:junit-platform-launcher'
+}
+
+def testJar = tasks.register('testJar', Test) {
+    description = 'Runs the test suite against the shipped fat jar.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = files(tasks.named('shadowJar')) + sourceSets.test.output + configurations.jarTestRuntime
+    systemProperty 'golden.update', 'false'
+    useJUnitPlatform {
+        excludeTags 'benchmark'
+    }
+    filter {
+        excludeTestsMatching 'dev.gitdigest.GitHubClientHttpTest'
+        excludeTestsMatching 'dev.gitdigest.GitHubClientTest'
+    }
+}
+
+tasks.named('check') {
+    dependsOn testJar
 }
 
 tasks.register('benchmark', Test) {

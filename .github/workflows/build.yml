@@ -65,5 +65,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: build/reports/tests/test/
+          # Both suites: test (the compiled classes) and testJar (the fat jar).
+          path: build/reports/tests/
           retention-days: 7
