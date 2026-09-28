@@ -27,6 +27,35 @@ class StatsPrinterTest {
     }
 
     @Test
+    void aLongTailOfAuthorsIsSummarisedNotListed() {
+        // picocli has 153 authors; listing them all scrolls the heading, and
+        // every section after it, off the screen.
+        Map<String, Long> authors = new LinkedHashMap<>();
+        for (int i = 1; i <= 13; i++) {
+            authors.put("Author" + i, 100L - i);
+        }
+
+        String out = render(stats(authors));
+
+        assertTrue(out.contains("Author10 "), out);
+        assertFalse(out.contains("Author11"), "the eleventh author should not have a row: " + out);
+        assertTrue(out.contains("... and 3 more"), out);
+    }
+
+    @Test
+    void tenAuthorsOrFewerAreAllListedWithNoSummaryLine() {
+        Map<String, Long> authors = new LinkedHashMap<>();
+        for (int i = 1; i <= 10; i++) {
+            authors.put("Author" + i, 100L - i);
+        }
+
+        String out = render(stats(authors));
+
+        assertTrue(out.contains("Author10 "), out);
+        assertFalse(out.contains("more"), out);
+    }
+
+    @Test
     void aSmallValueNeverRoundsDownToNothing() {
         // 1 of 100 scales to 1*20/100 = 0 in integer arithmetic; a real
         // contribution must not render as an empty bar

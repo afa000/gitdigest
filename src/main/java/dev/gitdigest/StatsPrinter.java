@@ -3,6 +3,7 @@ package dev.gitdigest;
 import java.io.PrintStream;
 import java.time.DayOfWeek;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -17,6 +18,13 @@ public class StatsPrinter implements StatsRenderer {
 
     private static final int BAR_WIDTH = 20;
     private static final int MAX_LABEL_WIDTH = 40;
+
+    /**
+     * Authors shown before the rest are summarised in one line. picocli has
+     * 153, and a table that long scrolls its own heading off the screen; the
+     * long tail is in the JSON and Markdown output, which are for keeping.
+     */
+    private static final int TOP_AUTHORS = 10;
 
     private final String block;
     private final boolean color;
@@ -47,20 +55,23 @@ public class StatsPrinter implements StatsRenderer {
             return;
         }
 
-        printRanked(out, "Commits per author", stats.commitsPerAuthor(), false);
-        printRanked(out, "Top changed files", stats.topChangedFiles(), true);
+        printRanked(out, "Commits per author", stats.commitsPerAuthor(), false, TOP_AUTHORS);
+        printRanked(out, "Top changed files", stats.topChangedFiles(), true, Integer.MAX_VALUE);
         printByDay(out, stats.commitsByDayOfWeek());
         printByHour(out, stats.commitsByHour());
     }
 
-    /** Prints an already-ranked map: label, bar, count. */
-    private void printRanked(PrintStream out, String title, Map<String, Long> counts, boolean isPath) {
+    /** Prints an already-ranked map: label, bar, count, up to {@code limit} rows. */
+    private void printRanked(PrintStream out, String title, Map<String, Long> ranked, boolean isPath, int limit) {
         out.println();
         out.println(heading(title));
-        if (counts.isEmpty()) {
+        if (ranked.isEmpty()) {
             out.println("  (no data)");
             return;
         }
+        // The map is already in rank order, so the first entries are the top.
+        Map<String, Long> counts = new LinkedHashMap<>();
+        ranked.entrySet().stream().limit(limit).forEach(e -> counts.put(e.getKey(), e.getValue()));
 
         int labelWidth = Math.min(
                 counts.keySet().stream().mapToInt(String::length).max().orElse(0),
@@ -70,6 +81,11 @@ public class StatsPrinter implements StatsRenderer {
 
         counts.forEach((label, count) ->
                 out.printf(Locale.ROOT, format, truncate(label, labelWidth, isPath), bar(count, max), count));
+
+        int hidden = ranked.size() - counts.size();
+        if (hidden > 0) {
+            out.printf(Locale.ROOT, "  ... and %d more (--format json lists them all)%n", hidden);
+        }
     }
 
     /**

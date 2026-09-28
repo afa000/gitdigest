@@ -17,11 +17,17 @@ $ gitdigest stats ~/code/picocli
 Repository stats - 4731 commits
 
 Commits per author
-  Remko Popma                ####################  2895
-  rpopma                     #####                 790
-  dependabot[bot]            #                     279
-  Andreas Deininger          #                     134
-  NewbieOrange               #                     134
+  Remko Popma        ####################  2895
+  rpopma             #####                 790
+  dependabot[bot]    #                     279
+  Andreas Deininger  #                     134
+  NewbieOrange       #                     134
+  Wenshuai Hou       #                     30
+  Marko Mackic       #                     23
+  Ross Goldberg      #                     22
+  Ahmed El Khalifa   #                     17
+  Sualeh Fatehi      #                     15
+  ... and 143 more (--format json lists them all)
 
 Activity by day
   MON  ###################   721
