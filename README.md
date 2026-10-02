@@ -195,6 +195,13 @@ and you still get a whole page. If it fails *partway*, it does not — a second
 set of notes printed underneath the first half of another would be worse than
 the truth, so it says the output is incomplete and exits non-zero.
 
+If Claude's safety checks decline the request - commit messages are arbitrary
+text, and a plainly described security fix can trip them - the API retries it
+on another model in the same stream, picking the substitute by the reason for
+the decline. A decline partway through keeps what was written and the other
+model finishes the page. Either way the tool names the model that actually
+wrote the notes.
+
 Notes go to stdout and everything else to stderr, so this writes a clean file:
 
 ```

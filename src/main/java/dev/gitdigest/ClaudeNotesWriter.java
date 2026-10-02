@@ -3,19 +3,23 @@ package dev.gitdigest;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.core.JsonValue;
 import com.anthropic.core.http.StreamResponse;
 import com.anthropic.errors.AnthropicIoException;
 import com.anthropic.errors.NoCredentialsException;
 import com.anthropic.errors.PermissionDeniedException;
 import com.anthropic.errors.RateLimitException;
 import com.anthropic.errors.UnauthorizedException;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.OutputConfig;
-import com.anthropic.models.messages.RawMessageStreamEvent;
+import com.anthropic.models.beta.messages.BetaOutputConfig;
+import com.anthropic.models.beta.messages.BetaRawMessageStreamEvent;
+import com.anthropic.models.beta.messages.MessageCreateParams;
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Release notes written by Claude, streamed into the terminal as they arrive.
@@ -32,14 +36,31 @@ import com.anthropic.models.messages.RawMessageStreamEvent;
 public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
 
     /**
-     * Anthropic's most capable widely available model.
+     * Claude Opus 5, Anthropic's recommended default model.
      *
      * <p>Worth the choice for this job: the difference between adequate and
      * good release notes is entirely in judgement - which six commits are one
-     * story, which twenty are not worth a line - and that is what the better
+     * story, which twenty are not worth a line - and that is what a strong
      * model buys.
      */
     private static final String MODEL = "claude-opus-5";
+
+    /**
+     * Server-side fallbacks, in the form that lets the API pick the substitute.
+     *
+     * <p>Opus 5's safety classifiers can decline a request, and commit
+     * messages are arbitrary text - a security fix described plainly can look
+     * like something else. Without this, a decline drops the user to the
+     * offline notes, or leaves half a page on screen. With it, the API re-runs
+     * the request on another model in the same stream. "default" rather than a
+     * named model, because the right substitute depends on why the request was
+     * declined, and a pinned one is a migration owed when it is retired.
+     *
+     * <p>Sent as a raw body property: the SDK version pinned here predates the
+     * typed builder for it, and the version that has one would add some 15 MB
+     * to the jar for the sake of a single field.
+     */
+    private static final String FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
     /**
      * Far more than release notes need, which is the point.
@@ -55,6 +76,9 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
 
     private final AnthropicClient client;
     private final PrintStream progress;
+
+    /** Every model that wrote part of the notes, in order - usually just one. */
+    private final Set<String> writtenBy = new LinkedHashSet<>();
 
     public ClaudeNotesWriter(AnthropicClient client, PrintStream progress) {
         this.client = client;
@@ -143,9 +167,19 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
         return value != null && !value.isBlank();
     }
 
+    /**
+     * Who wrote the notes, which after a fallback is not the model asked.
+     *
+     * <p>Read from the stream rather than assumed: claiming "claude-opus-5"
+     * for text another model wrote is the same kind of quiet misreport this
+     * class goes out of its way to avoid everywhere else.
+     */
     @Override
     public String describe() {
-        return "written by " + MODEL;
+        if (writtenBy.isEmpty() || writtenBy.equals(Set.of(MODEL))) {
+            return "written by " + MODEL;
+        }
+        return "written by " + String.join(", then ", writtenBy) + " (the fallback for " + MODEL + ")";
     }
 
     @Override
@@ -158,7 +192,9 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
                 // Opus 5 thinks by default, and for a writing task of this size
                 // the top of the effort range buys nothing a reader would
                 // notice while costing tokens and a longer silence.
-                .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.MEDIUM).build())
+                .outputConfig(BetaOutputConfig.builder().effort(BetaOutputConfig.Effort.MEDIUM).build())
+                .addBeta(FALLBACK_BETA)
+                .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
                 .build();
 
         progress.println("gitdigest: asking " + MODEL + " for release notes (" + tone.label() + ")...");
@@ -166,11 +202,17 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
         boolean started = false;
         boolean ended = false;
         String stopReason = null;
-        try (StreamResponse<RawMessageStreamEvent> stream = client.messages().createStreaming(params)) {
-            for (RawMessageStreamEvent event : (Iterable<RawMessageStreamEvent>) stream.stream()::iterator) {
+        try (StreamResponse<BetaRawMessageStreamEvent> stream = client.beta().messages().createStreaming(params)) {
+            for (BetaRawMessageStreamEvent event : (Iterable<BetaRawMessageStreamEvent>) stream.stream()::iterator) {
                 if (event.messageStop().isPresent()) {
                     ended = true;
                 }
+                // A decline before any output is retried before the stream
+                // opens, so message_start already names the model that writes.
+                // A decline partway is marked by a fallback block instead, and
+                // the new model carries on from the text already printed.
+                event.messageStart().ifPresent(start -> writtenBy.add(start.message().model().asString()));
+                fallbackModelOf(event).ifPresent(writtenBy::add);
                 Optional<String> reason = stopReasonOf(event);
                 if (reason.isPresent()) {
                     stopReason = reason.get();
@@ -203,7 +245,9 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
             // - the output limit, a refusal, something added to the API after
             // this was written - means what is on screen is not the notes that
             // were asked for. Guessing which unknown reasons are benign is how
-            // a refusal ends up in someone's RELEASE_NOTES.md.
+            // a refusal ends up in someone's RELEASE_NOTES.md. Fallbacks make a
+            // refusal rarer, not impossible: if the fallback model is itself
+            // rate-limited, the API returns the refusal instead.
             if (stopReason != null && !"end_turn".equals(stopReason)) {
                 throw failure(NotesException.Reason.OTHER,
                         "the model stopped with " + stopReason, started, null, out);
@@ -236,15 +280,29 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
         return new NotesException(reason, detail, started, cause);
     }
 
+    /**
+     * The model a fallback block hands over to, if this event starts one.
+     *
+     * <p>The pinned SDK has no type for the block, so it arrives as raw JSON.
+     */
+    private static Optional<String> fallbackModelOf(BetaRawMessageStreamEvent event) {
+        return event.contentBlockStart()
+                .flatMap(start -> start.contentBlock()._json())
+                .map(json -> json.convert(JsonNode.class))
+                .filter(block -> "fallback".equals(block.path("type").asText()))
+                .map(block -> block.path("to").path("model").asText())
+                .filter(model -> !model.isBlank());
+    }
+
     /** Why the model stopped, when an event says so. */
-    private static Optional<String> stopReasonOf(RawMessageStreamEvent event) {
+    private static Optional<String> stopReasonOf(BetaRawMessageStreamEvent event) {
         return event.messageDelta()
                 .flatMap(messageDelta -> messageDelta.delta().stopReason())
                 .map(reason -> reason.asString());
     }
 
     /** The text of a content delta, or empty for every other kind of event. */
-    private static Optional<String> textOf(RawMessageStreamEvent event) {
+    private static Optional<String> textOf(BetaRawMessageStreamEvent event) {
         return event.contentBlockDelta()
                 .flatMap(delta -> delta.delta().text())
                 .map(textDelta -> textDelta.text());

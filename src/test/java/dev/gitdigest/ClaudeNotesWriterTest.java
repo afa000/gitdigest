@@ -40,6 +40,7 @@ class ClaudeNotesWriterTest {
     private HttpServer server;
     private String baseUrl;
     private final AtomicReference<String> requestBody = new AtomicReference<>("");
+    private final AtomicReference<String> betaHeader = new AtomicReference<>("");
 
     @BeforeEach
     void startServer() throws IOException {
@@ -57,6 +58,7 @@ class ClaudeNotesWriterTest {
     private void respondWithStream(String sse) {
         server.createContext("/", exchange -> {
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            betaHeader.set(String.valueOf(exchange.getRequestHeaders().getFirst("anthropic-beta")));
             exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
             byte[] body = sse.getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, body.length);
@@ -83,10 +85,23 @@ class ClaudeNotesWriterTest {
     }
 
     private static String messageStart() {
+        return messageStart("claude-opus-5");
+    }
+
+    /** The model a message_start names is the one that will write. */
+    private static String messageStart(String model) {
         return event("message_start", """
                 {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant",\
-                "model":"claude-opus-5","content":[],"stop_reason":null,"stop_sequence":null,\
-                "usage":{"input_tokens":10,"output_tokens":1}}}""");
+                "model":"%s","content":[],"stop_reason":null,"stop_sequence":null,\
+                "usage":{"input_tokens":10,"output_tokens":1}}}""".formatted(model));
+    }
+
+    /** The marker the API streams where one model hands over to another. */
+    private static String fallbackBlock(String from, String to) {
+        return event("content_block_start", """
+                {"type":"content_block_start","index":0,"content_block":{"type":"fallback",\
+                "from":{"model":"%s"},"to":{"model":"%s"}}}""".formatted(from, to))
+                + event("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":0}");
     }
 
     private static String textBlockStart() {
@@ -134,6 +149,15 @@ class ClaudeNotesWriterTest {
         // Windows is CRLF. That is right for a terminal and wrong for a string
         // comparison written on a different machine.
         return sink.toString(StandardCharsets.UTF_8).replace("\r\n", "\n");
+    }
+
+    /** What the writer reports about itself after a successful run. */
+    private String describeAfterWriting(ByteArrayOutputStream sink) {
+        PrintStream out = new PrintStream(sink, true, StandardCharsets.UTF_8);
+        try (ClaudeNotesWriter writer = new ClaudeNotesWriter(client(), quiet())) {
+            writer.write(changelog(), NotesCommand.Tone.FORMAL, out);
+            return writer.describe();
+        }
     }
 
     private NotesException writeExpectingFailure(ByteArrayOutputStream sink) {
@@ -185,6 +209,60 @@ class ClaudeNotesWriterTest {
     }
 
     @Test
+    void theRequestAsksForServerSideFallbacks() {
+        // "default" lets the API pick the substitute by why the request was
+        // declined. The header has to be the -07-01 one: the -06-01 header
+        // gates the array form, and pairing either with the other is a 400.
+        respondWithStream(messageStart() + textBlockStart() + textDelta("ok") + closingEvents());
+
+        write(new ByteArrayOutputStream());
+
+        assertTrue(requestBody.get().contains("\"fallbacks\":\"default\""), requestBody.get());
+        assertTrue(betaHeader.get().contains("server-side-fallback-2026-07-01"), betaHeader.get());
+    }
+
+    @Test
+    void notesFromTheRequestedModelSayWhoWroteThem() {
+        respondWithStream(messageStart() + textBlockStart() + textDelta("ok") + closingEvents());
+
+        assertEquals("written by claude-opus-5", describeAfterWriting(new ByteArrayOutputStream()));
+    }
+
+    @Test
+    void aFallbackBeforeAnyOutputCreditsTheModelThatWrote() {
+        // The declined attempt happens before the stream opens, so the user
+        // sees nothing of it - but "written by claude-opus-5" would be false.
+        respondWithStream(messageStart("claude-opus-4-8")
+                + fallbackBlock("claude-opus-5", "claude-opus-4-8")
+                + textBlockStart() + textDelta("## Release v2.0") + closingEvents());
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        String writtenBy = describeAfterWriting(sink);
+
+        assertEquals("## Release v2.0\n", sink.toString(StandardCharsets.UTF_8).replace("\r\n", "\n"));
+        assertEquals("written by claude-opus-4-8 (the fallback for claude-opus-5)", writtenBy);
+    }
+
+    @Test
+    void aFallbackPartwayKeepsThePageAndCreditsBothModels() {
+        // Declined mid-answer: the API keeps what was written, marks the
+        // handover, and the fallback model carries on from that text. The page
+        // is complete and succeeds - it just had two authors.
+        respondWithStream(messageStart() + textBlockStart()
+                + textDelta("## Release v2.0") + textDelta("\\n\\nIt is")
+                + fallbackBlock("claude-opus-5", "claude-opus-4-8")
+                + textBlockStart() + textDelta(" faster now.")
+                + closingEvents());
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+
+        String writtenBy = describeAfterWriting(sink);
+
+        assertEquals("## Release v2.0\n\nIt is faster now.\n",
+                sink.toString(StandardCharsets.UTF_8).replace("\r\n", "\n"));
+        assertEquals("written by claude-opus-5, then claude-opus-4-8 (the fallback for claude-opus-5)", writtenBy);
+    }
+
+    @Test
     void aStreamThatStopsPartwayIsReportedAsPartial() {
         // No message_stop: the connection ended mid-answer. Half a page of
         // notes is already on screen, so the run cannot silently restart - and
@@ -223,7 +301,9 @@ class ClaudeNotesWriterTest {
         // A refusal arrives as a perfectly healthy HTTP 200 with text in it.
         // Taken at face value it would be written to the terminal, announced
         // as "notes written by claude-opus-5", and exit 0 - straight into
-        // someone's RELEASE_NOTES.md.
+        // someone's RELEASE_NOTES.md. Fallbacks make this rarer, not
+        // impossible: when the fallback model is rate-limited, the API returns
+        // the refusal itself.
         respondWithStream(messageStart() + textBlockStart()
                 + textDelta("I can't help with that.")
                 + event("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":0}")
