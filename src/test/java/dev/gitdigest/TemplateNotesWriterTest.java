@@ -144,15 +144,53 @@ class TemplateNotesWriterTest {
     }
 
     @Test
-    void aRangeOfOnlyNoiseStillProducesAValidPage() {
+    void aRangeOfOnlyPlumbingListsItUnderMaintenance() {
+        // v1.0.2 was one build: commit and a version bump, and its notes said
+        // "2 commits" and listed neither. With nothing else to show, the
+        // plumbing is the release.
+        String notes = write(changelogOf(group(ChangeGroup.OTHER,
+                entry("build", null, false, "drop unused dependencies"),
+                entry("chore", null, false, "bump versions"))), NotesCommand.Tone.FORMAL);
+
+        assertTrue(notes.contains("### Maintenance"), notes);
+        assertTrue(notes.contains("- Drop unused dependencies"), notes);
+        assertTrue(notes.contains("- Bump versions"), notes);
+        assertFalse(notes.contains("### Other"), "plumbing is listed once, under its own heading");
+    }
+
+    @Test
+    void theVersionBumpIsNotListedAsTheChange() {
+        String notes = write(changelogOf(group(ChangeGroup.OTHER,
+                entry("build", null, false, "drop unused dependencies"),
+                entry("chore", "release", false, "1.0.2"))), NotesCommand.Tone.FORMAL);
+
+        assertTrue(notes.contains("- Drop unused dependencies"), notes);
+        assertFalse(notes.contains("1.0.2"), "the bump restates the heading: " + notes);
+    }
+
+    @Test
+    void aRangeThatIsOnlyTheVersionBumpStillProducesAValidPage() {
         // Degrading has to degrade all the way down: a heading and a count with
         // no sections is a correct answer, and an exception is not.
         String notes = write(changelogOf(group(ChangeGroup.OTHER,
-                entry("chore", null, false, "bump versions"))), NotesCommand.Tone.FORMAL);
+                entry("chore", "release", false, "2.0"))), NotesCommand.Tone.FORMAL);
 
         assertTrue(notes.startsWith("## Changes from v1.0 to v2.0"));
         assertTrue(notes.contains("1 commit"));
-        assertFalse(notes.contains("### Other"));
+        assertFalse(notes.contains("### Maintenance"), notes);
+    }
+
+    @Test
+    void plumbingStaysHiddenBesideARealChange() {
+        Map<ChangeGroup, List<ChangelogEntry>> groups = group(ChangeGroup.FEATURES,
+                entry("feat", null, false, "add search"));
+        groups.put(ChangeGroup.OTHER, List.of(entry("chore", null, false, "bump versions")));
+
+        String notes = write(changelogOf(groups), NotesCommand.Tone.FORMAL);
+
+        assertTrue(notes.contains("- Add search"), notes);
+        assertFalse(notes.contains("Bump versions"), notes);
+        assertFalse(notes.contains("### Maintenance"), notes);
     }
 
     @Test

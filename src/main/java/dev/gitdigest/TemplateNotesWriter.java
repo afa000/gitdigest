@@ -46,15 +46,31 @@ public class TemplateNotesWriter implements ReleaseNotesWriter {
             breaking.forEach(entry -> out.println(bullet(entry)));
         }
 
+        boolean listedAnything = !breaking.isEmpty();
         for (Map.Entry<ChangeGroup, List<ChangelogEntry>> group : changelog.groups().entrySet()) {
             List<ChangelogEntry> entries = worthListing(group.getValue());
             if (entries.isEmpty()) {
                 continue;
             }
+            listedAnything = true;
             out.println();
             out.println("### " + group.getKey().label());
             out.println();
             entries.forEach(entry -> out.println(bullet(entry)));
+        }
+
+        // Plumbing is left out to keep it from burying the changes people
+        // upgrade for. When there are none, there is nothing to bury: hiding
+        // it anyway turned v1.0.2 - a smaller jar, from one build: commit -
+        // into a page that said "2 commits" and listed neither.
+        if (!listedAnything) {
+            List<ChangelogEntry> plumbing = plumbingIn(changelog);
+            if (!plumbing.isEmpty()) {
+                out.println();
+                out.println("### Maintenance");
+                out.println();
+                plumbing.forEach(entry -> out.println(bullet(entry)));
+            }
         }
 
         Set<String> contributors = contributorsOf(changelog);
@@ -103,6 +119,19 @@ public class TemplateNotesWriter implements ReleaseNotesWriter {
         return entries.stream()
                 .filter(entry -> !entry.breaking())
                 .filter(entry -> entry.type() == null || !NOISE_TYPES.contains(entry.type()))
+                .toList();
+    }
+
+    /**
+     * Every entry, for a range with nothing else to show - except the
+     * version bump itself. "chore(release): 1.0.2" restates the heading, and
+     * as the only bullet it would read as though the version number were
+     * the change.
+     */
+    private static List<ChangelogEntry> plumbingIn(Changelog changelog) {
+        return changelog.groups().values().stream()
+                .flatMap(List::stream)
+                .filter(entry -> !"release".equalsIgnoreCase(entry.scope()))
                 .toList();
     }
 
