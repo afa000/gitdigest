@@ -61,7 +61,7 @@ Download `gitdigest-<version>.jar` from the
 [latest release](https://github.com/afa000/gitdigest/releases/latest) and run it:
 
 ```
-java -jar gitdigest-1.0.2.jar stats .
+java -jar gitdigest-1.1.0.jar stats .
 ```
 
 That is the whole install. The jar bundles its dependencies, so there is
