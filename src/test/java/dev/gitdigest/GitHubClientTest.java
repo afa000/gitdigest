@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Link header parsing, which is the part of the client that is pure enough to
- * test without a server. The HTTP behaviour itself gets a WireMock test in
- * Phase 6.
+ * test without a server. The HTTP behaviour itself is covered with WireMock in
+ * {@link GitHubClientHttpTest}.
  */
 class GitHubClientTest {
 

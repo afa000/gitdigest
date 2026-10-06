@@ -52,7 +52,7 @@ public class StatsCalculator {
      *
      * <p>Equal counts are broken by key so the ordering is total: without that,
      * two authors with the same number of commits could swap places between
-     * runs, which would make the golden-file tests in Phase 6 flaky.
+     * runs, which would make the output - and the golden files that pin it - unstable.
      */
     private static <K extends Comparable<K>> Map<K, Long> rankByCountDesc(Map<K, Long> counts, int limit) {
         return counts.entrySet().stream()
