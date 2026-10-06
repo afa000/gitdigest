@@ -46,8 +46,11 @@ The recording at the top is made by [`demo.tape`](demo.tape) - see [Demo](#demo)
 - **JDK 25**
 - **`GITHUB_TOKEN`** — optional, and only used by `--github`. Without one you get
   GitHub's unauthenticated allowance of 60 requests an hour; with one, 5000.
-- **`ANTHROPIC_API_KEY`** — optional, and only used by `notes`. Without one the
-  release notes are assembled from the commits instead of written by Claude.
+  `GH_TOKEN` is read if `GITHUB_TOKEN` is not set.
+- **`ANTHROPIC_API_KEY`** — optional, and only used by `notes`. Without Anthropic
+  credentials the release notes are assembled from the commits instead of
+  written by Claude. An `ANTHROPIC_AUTH_TOKEN`, a profile saved by
+  `ant auth login`, or workload identity federation in CI work as well as a key.
 
 ```
 # PowerShell
@@ -92,7 +95,7 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-25.0.2"
 |---|---|
 | `gitdigest stats <repo>` | Commits per author, the busiest files, and activity by day and hour |
 | `gitdigest changelog <repo>` | Commits between two revisions, grouped by type |
-| `gitdigest notes <repo>` | Release notes for a commit range, written by Claude |
+| `gitdigest notes <repo>` | Release notes for a commit range, written by Claude or, without credentials, assembled from the commits |
 
 `<repo>` defaults to the current directory. Every command takes `--help`.
 
@@ -100,32 +103,36 @@ $env:JAVA_HOME = "C:\Program Files\Java\jdk-25.0.2"
 
 | Flag | Applies to | Effect |
 |---|---|---|
-| `--format table\|json\|markdown` | both | How to render the result (default `table`) |
-| `--author <text>` | both | Case-insensitive substring of the author name or email |
+| `--format table\|json\|markdown` | `stats`, `changelog` | How to render the result (default `table`) |
+| `--author <text>` | `stats`, `changelog` | Case-insensitive substring of the author name or email |
 | `--since <YYYY-MM-DD>` | `stats` | Only commits on or after this date, inclusive |
 | `--until <YYYY-MM-DD>` | `stats` | Only commits on or before this date, inclusive |
-| `--from <rev>` | `changelog` | Start of the range, **excluded** — a tag, branch or hash |
-| `--to <rev>` | `changelog` | End of the range, included (default `HEAD`) |
+| `--from <rev>` | `changelog`, `notes` | Start of the range, **excluded** — a tag, branch or hash |
+| `--to <rev>` | `changelog`, `notes` | End of the range, included (default `HEAD`) |
 | `--github` | `changelog`, `notes` | Look up each commit's pull request on GitHub |
 | `--tone formal\|casual` | `notes` | Voice to write in (default `formal`) |
 | `--offline` | `notes` | Assemble the notes locally instead of calling Claude |
-| `--jobs <n>` | `changelog` | How many of those lookups to run at once (default `8`) |
+| `--jobs <n>` | `changelog` | How many of those lookups to run at once (default `8`; `notes` always uses 8) |
 
 `--from` is exclusive and `--to` is inclusive, matching `git log from..to`, so
 `--from v1.0 --to v2.0` describes what changed *after* v1.0 shipped.
 
 ```
-$ gitdigest changelog .
-Changelog HEAD - 5 changes
+$ gitdigest changelog . --to v1.0.0
+Changelog v1.0.0 - 7 changes
 
 Features
   9d68ed9  notes: write release notes with Claude (aflo692)
   29d0bd1  changelog: fetch pull requests in parallel (aflo692)
 
+Bug Fixes
+  2bb08ae  handle real-world repositories and polish the README (aflo692)
+
 Other
+  6c1be16  release: 1.0.0 (aflo692)
   ea2620c  ship a runnable jar, and build it in CI (aflo692)
   9affb5d  cover the git layer, the commands, and the wire (aflo692)
-  0359939  a Git analytics and changelog CLI (aflo692)
+  0359939  GitDigest: a Git analytics and changelog CLI (aflo692)
 ```
 
 Grouping reads [conventional commit](https://www.conventionalcommits.org)
@@ -223,6 +230,9 @@ plain text. `NO_COLOR` is honoured.
 Exit codes: `0` on success — including a repository with no commits, which is
 empty rather than broken; `1` with a one-line message on a bad path or an
 unknown revision; `2` when the arguments themselves do not parse.
+
+An unexpected failure is also reported in one line rather than as a stack
+trace; set `GITDIGEST_DEBUG=1` to get the trace back.
 
 ## Releases
 
