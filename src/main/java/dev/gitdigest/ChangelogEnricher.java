@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Attaches GitHub pull request data to changelog entries, several at a time.
@@ -68,6 +69,9 @@ public class ChangelogEnricher {
 
     /** Set once the API has told us to stop asking, so we stop asking. */
     private final AtomicBoolean halted = new AtomicBoolean();
+
+    /** Commits GitHub did not have, reported once at the end rather than per commit. */
+    private final AtomicInteger unknownCommits = new AtomicInteger();
 
     public ChangelogEnricher(PullRequestSource client, GitHubRepo repo, PrintStream progress) {
         this(client, repo, progress, DEFAULT_JOBS);
@@ -135,6 +139,12 @@ public class ChangelogEnricher {
                 enriched.put(group.getKey(), List.copyOf(entries));
             }
         }
+        // After the try block, so the progress counter has already been
+        // erased and this line cannot land in the middle of it.
+        int unknown = unknownCommits.get();
+        if (unknown > 0) {
+            progress.println(unknownCommitsNote(unknown));
+        }
         return new Changelog(changelog.fromRef(), changelog.toRef(), Collections.unmodifiableMap(enriched));
     }
 
@@ -181,22 +191,34 @@ public class ChangelogEnricher {
                 }
                 List<PullRequest> found = client.pullRequestsForCommit(repo, entry.sha());
                 return found.isEmpty() ? entry : entry.withPullRequest(found.get(0));
+            } catch (GitHubException.UnknownCommit e) {
+                // Says nothing about the next commit, so it is counted, not
+                // allowed to halt the run. Caught first: it is a GitHubException too.
+                unknownCommits.incrementAndGet();
+                return entry;
+            } catch (GitHubException.RateLimited e) {
+                reportOnce(bar, "gitdigest: " + e.getMessage()
+                        + System.lineSeparator()
+                        + "gitdigest: continuing without pull request data for the rest.");
+                return entry;
+            } catch (GitHubException e) {
+                // Every client message already names what went wrong - a refused
+                // token, a missing repository, an unreachable host - so it is
+                // printed as it is rather than wrapped in a guess.
+                reportOnce(bar, "gitdigest: " + e.getMessage()
+                        + System.lineSeparator()
+                        + "gitdigest: continuing without pull request data.");
+                return entry;
             } finally {
+                // Released only after a failure has been recorded. Caught out
+                // here instead, a thread waiting for this permit could take it
+                // in the gap before halted was set, and send a request the
+                // run already knew was pointless.
                 permits.release();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             halted.set(true);
-            return entry;
-        } catch (GitHubException.RateLimited e) {
-            reportOnce(bar, "gitdigest: " + e.getMessage()
-                    + System.lineSeparator()
-                    + "gitdigest: continuing without pull request data for the rest.");
-            return entry;
-        } catch (GitHubException e) {
-            reportOnce(bar, "gitdigest: could not reach GitHub (" + e.getMessage() + ")."
-                    + System.lineSeparator()
-                    + "gitdigest: continuing without pull request data.");
             return entry;
         } finally {
             bar.step();
@@ -216,5 +238,12 @@ public class ChangelogEnricher {
         if (halted.compareAndSet(false, true)) {
             bar.message(message);
         }
+    }
+
+    private static String unknownCommitsNote(int count) {
+        return count == 1
+                ? "gitdigest: 1 commit is not on GitHub yet (unpushed?); it is listed without pull request data."
+                : "gitdigest: " + count + " commits are not on GitHub yet (unpushed?); "
+                        + "they are listed without pull request data.";
     }
 }

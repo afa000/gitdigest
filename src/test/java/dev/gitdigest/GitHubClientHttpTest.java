@@ -256,6 +256,20 @@ class GitHubClientHttpTest {
     }
 
     @Test
+    void aCommitGitHubHasNeverSeenIsUnknownRatherThanAnOutage() {
+        // The status GitHub returned on 2026-10-05 for a local commit that had
+        // not been pushed. Unlike a 404 it says nothing about the next commit.
+        SERVER.stubFor(get(urlPathEqualTo(PULLS)).willReturn(aResponse().withStatus(422)));
+
+        try (GitHubClient client = client("token")) {
+            GitHubException failure = assertThrows(GitHubException.UnknownCommit.class,
+                    () -> client.pullRequestsForCommit(REPO, SHA));
+
+            assertTrue(failure.getMessage().contains("422"), failure.getMessage());
+        }
+    }
+
+    @Test
     void malformedJsonIsReportedAsSuchRatherThanCrashing() {
         SERVER.stubFor(get(urlPathEqualTo(PULLS)).willReturn(aResponse().withStatus(200)
                 .withHeader("Content-Type", "application/json").withBody("{ not json")));

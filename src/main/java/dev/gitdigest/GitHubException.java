@@ -21,4 +21,18 @@ public class GitHubException extends RuntimeException {
             super(message);
         }
     }
+
+    /**
+     * GitHub does not have this commit - usually because it has not been
+     * pushed yet.
+     *
+     * <p>Kept separate because, unlike every other failure here, it says
+     * nothing about the next request: the commit after it may well be on
+     * GitHub, so it must not stop the run.
+     */
+    public static class UnknownCommit extends GitHubException {
+        public UnknownCommit(String message) {
+            super(message);
+        }
+    }
 }
