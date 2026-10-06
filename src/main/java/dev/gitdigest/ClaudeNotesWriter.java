@@ -36,19 +36,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
 
     /**
-     * Claude Opus 5, Anthropic's recommended default model.
+     * Claude Opus 5.5, the current Opus model - and cheaper than Opus 5 was.
      *
      * <p>Worth the choice for this job: the difference between adequate and
      * good release notes is entirely in judgement - which six commits are one
      * story, which twenty are not worth a line - and that is what a strong
      * model buys.
      */
-    private static final String MODEL = "claude-opus-5";
+    private static final String MODEL = "claude-opus-5-5";
 
     /**
      * Server-side fallbacks, in the form that lets the API pick the substitute.
      *
-     * <p>Opus 5's safety classifiers can decline a request, and commit
+     * <p>Opus 5.5's safety classifiers can decline a request, and commit
      * messages are arbitrary text - a security fix described plainly can look
      * like something else. Without this, a decline drops the user to the
      * offline notes, or leaves half a page on screen. With it, the API re-runs
@@ -170,7 +170,7 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
     /**
      * Who wrote the notes, which after a fallback is not the model asked.
      *
-     * <p>Read from the stream rather than assumed: claiming "claude-opus-5"
+     * <p>Read from the stream rather than assumed: claiming "claude-opus-5-5"
      * for text another model wrote is the same kind of quiet misreport this
      * class goes out of its way to avoid everywhere else.
      */
@@ -189,9 +189,11 @@ public class ClaudeNotesWriter implements ReleaseNotesWriter, AutoCloseable {
                 .maxTokens(MAX_TOKENS)
                 .system(NotesPrompt.system(tone))
                 .addUserMessage(NotesPrompt.user(changelog))
-                // Opus 5 thinks by default, and for a writing task of this size
-                // the top of the effort range buys nothing a reader would
-                // notice while costing tokens and a longer silence.
+                // Opus 5.5 always thinks; effort is the only dial. Medium is
+                // already its default, but it is set here so a model change
+                // cannot move it silently - Opus 5 defaulted to high, and for a
+                // page of release notes the top of the range buys nothing a
+                // reader would notice.
                 .outputConfig(BetaOutputConfig.builder().effort(BetaOutputConfig.Effort.MEDIUM).build())
                 .addBeta(FALLBACK_BETA)
                 .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
