@@ -156,8 +156,11 @@ public class GitHubClient implements PullRequestSource, AutoCloseable {
             return new GitHubException("GitHub rejected the token in GITHUB_TOKEN (401).");
         }
         if (status == 404) {
-            return new GitHubException("GitHub has no such repository (404). "
-                    + "A private repository needs GITHUB_TOKEN to be set.");
+            // GitHub answers 404 rather than 403 for a private repository the
+            // caller cannot see, so the advice depends on whether a token was sent.
+            return new GitHubException(isAuthenticated()
+                    ? "GitHub has no such repository, or GITHUB_TOKEN cannot see it (404)."
+                    : "GitHub has no such repository (404). A private repository needs GITHUB_TOKEN to be set.");
         }
         if (status == 422) {
             // What this endpoint answers for a commit GitHub has never seen,

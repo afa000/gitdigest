@@ -8,6 +8,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -252,6 +253,22 @@ class GitHubClientHttpTest {
 
             assertTrue(failure.getMessage().contains("404"), failure.getMessage());
             assertTrue(failure.getMessage().contains("private"), failure.getMessage());
+        }
+    }
+
+    @Test
+    void aMissingRepositoryWithATokenSaysTheTokenMayNotSeeIt() {
+        // GitHub also answers 404 to a token that cannot see a private
+        // repository. Telling that user to set the token they already set
+        // would send them in a circle.
+        SERVER.stubFor(get(urlPathEqualTo(PULLS)).willReturn(aResponse().withStatus(404)));
+
+        try (GitHubClient client = client("token")) {
+            GitHubException failure = assertThrows(GitHubException.class,
+                    () -> client.pullRequestsForCommit(REPO, SHA));
+
+            assertTrue(failure.getMessage().contains("cannot see it"), failure.getMessage());
+            assertFalse(failure.getMessage().contains("needs GITHUB_TOKEN to be set"), failure.getMessage());
         }
     }
 
