@@ -118,7 +118,7 @@ public class ChangelogEnricher {
 
             // Submit everything first, then collect. Submitting and waiting in
             // the same pass would run the lookups one at a time with extra
-            // ceremony, which is the bug this phase exists to remove.
+            // ceremony.
             Map<ChangeGroup, List<Future<ChangelogEntry>>> pending = new EnumMap<>(ChangeGroup.class);
             for (Map.Entry<ChangeGroup, List<ChangelogEntry>> group : changelog.groups().entrySet()) {
                 List<Future<ChangelogEntry>> futures = new ArrayList<>(group.getValue().size());

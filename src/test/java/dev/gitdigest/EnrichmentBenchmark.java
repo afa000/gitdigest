@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Measures what Phase 4 was for, and prints the number that goes in the README.
+ * Measures what parallel enrichment buys, and prints the number that goes in the README.
  *
  * <p>Run it with {@code .\gradlew benchmark}. It is tagged out of the normal
  * test run on purpose: it takes about fifteen seconds, most of it deliberately

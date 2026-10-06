@@ -99,7 +99,7 @@ public class StatsPrinter implements StatsRenderer {
         for (DayOfWeek day : DayOfWeek.values()) {
             long count = byDay.getOrDefault(day, 0L);
             // name().substring beats getDisplayName here: no locale in the
-            // output means the Phase 6 golden files stay stable everywhere.
+            // output means the golden files stay stable everywhere.
             out.printf(Locale.ROOT, "  %-3s  %-" + BAR_WIDTH + "s  %d%n",
                     day.name().substring(0, 3), bar(count, max), count);
         }

@@ -12,7 +12,7 @@ import java.util.List;
  * @param authorEmail  e.g. "ada@example.com"
  * @param when         author timestamp
  * @param subject      first line of the commit message
- * @param filesChanged paths touched by this commit (empty until Step 5)
+ * @param filesChanged paths touched by this commit; empty for a merge
  */
 public record CommitInfo(
         String sha,
