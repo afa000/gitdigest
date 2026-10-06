@@ -50,6 +50,8 @@ class ChangelogEnricherTest {
         GitHubException failure = new GitHubException.RateLimited("GitHub rate limit reached.");
         /** Held long enough that overlapping requests actually overlap. */
         long holdMillis;
+        /** The first this-many calls answer as GitHub does for an unpushed commit. */
+        int unknownFirst;
 
         @Override
         public List<PullRequest> pullRequestsForCommit(GitHubRepo repo, String sha) {
@@ -58,6 +60,9 @@ class ChangelogEnricherTest {
             try {
                 if (holdMillis > 0) {
                     Thread.sleep(holdMillis);
+                }
+                if (n <= unknownFirst) {
+                    throw new GitHubException.UnknownCommit("GitHub does not have this commit (422).");
                 }
                 if (failAfter >= 0 && n > failAfter) {
                     throw failure;
@@ -185,7 +190,57 @@ class ChangelogEnricherTest {
 
         assertEquals(15, after.totalEntries());
         assertTrue(allOf(after).stream().allMatch(e -> e.pullRequest() == null));
-        assertEquals(1, countOf(log, "could not reach GitHub"));
+        // The client's own message already says what happened; the enricher
+        // must not wrap every failure in "could not reach", which was false
+        // for a 401, a 404 or a 500.
+        assertEquals(1, countOf(log, "Could not reach GitHub: connection refused"));
+        assertEquals(0, countOf(log, "could not reach GitHub ("));
+    }
+
+    @Test
+    void aCommitGitHubDoesNotHaveDoesNotStopTheOthers() {
+        StubSource source = new StubSource();
+        source.unknownFirst = 1;
+        ByteArrayOutputStream log = new ByteArrayOutputStream();
+
+        Changelog after = new ChangelogEnricher(source, REPO, printTo(log), 1, UNPACED).enrich(changelogOf(5, 5));
+
+        assertEquals(10, source.calls.get(), "an unpushed commit must not stop the lookups after it");
+        assertEquals(9, allOf(after).stream().filter(e -> e.pullRequest() != null).count());
+        assertEquals(1, countOf(log, "1 commit is not on GitHub yet"));
+        assertEquals(0, countOf(log, "continuing without"), "nothing went wrong with GitHub itself");
+    }
+
+    @Test
+    void aRangeThatIsEntirelyUnpushedIsCountedNotTreatedAsAnOutage() {
+        StubSource source = new StubSource();
+        source.unknownFirst = Integer.MAX_VALUE;
+        ByteArrayOutputStream log = new ByteArrayOutputStream();
+
+        Changelog after = new ChangelogEnricher(source, REPO, printTo(log), 8, UNPACED).enrich(changelogOf(3, 2));
+
+        assertEquals(5, source.calls.get());
+        assertEquals(5, after.totalEntries());
+        assertTrue(allOf(after).stream().allMatch(e -> e.pullRequest() == null));
+        assertEquals(1, countOf(log, "5 commits are not on GitHub yet"));
+        assertEquals(0, countOf(log, "continuing without"));
+    }
+
+    @Test
+    void aRateLimitAfterUnknownCommitsStillStopsAndStillCounts() {
+        StubSource source = new StubSource();
+        source.unknownFirst = 2;
+        source.failAfter = 4;
+        ByteArrayOutputStream log = new ByteArrayOutputStream();
+
+        Changelog after = new ChangelogEnricher(source, REPO, printTo(log), 1, UNPACED).enrich(changelogOf(10, 10));
+
+        // Calls 1-2 are unknown, 3-4 succeed, 5 finds the limit spent; with one
+        // permit nothing else is in flight, so nothing is asked after that.
+        assertEquals(5, source.calls.get());
+        assertEquals(20, after.totalEntries(), "no commit may be dropped by a failed lookup");
+        assertEquals(1, countOf(log, "rate limit reached"));
+        assertEquals(1, countOf(log, "2 commits are not on GitHub yet"));
     }
 
     @Test

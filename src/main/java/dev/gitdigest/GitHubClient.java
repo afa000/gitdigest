@@ -156,8 +156,13 @@ public class GitHubClient implements PullRequestSource, AutoCloseable {
             return new GitHubException("GitHub rejected the token in GITHUB_TOKEN (401).");
         }
         if (status == 404) {
-            return new GitHubException("GitHub has no such repository or commit (404). "
+            return new GitHubException("GitHub has no such repository (404). "
                     + "A private repository needs GITHUB_TOKEN to be set.");
+        }
+        if (status == 422) {
+            // What this endpoint answers for a commit GitHub has never seen,
+            // which is what a local commit that has not been pushed is.
+            return new GitHubException.UnknownCommit("GitHub does not have this commit (422).");
         }
         if (status == 403 || status == 429) {
             return rateLimitFailure(response);

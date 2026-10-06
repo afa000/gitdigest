@@ -151,7 +151,8 @@ Bug Fixes
 In `--format markdown` the number becomes a link. It is off by default because
 it costs one GitHub request per commit. If GitHub is unreachable, the remote is
 not on GitHub, or the rate limit runs out, the changelog still prints without
-the extra data.
+the extra data. A commit GitHub has not seen yet - one you have not pushed - is
+listed without a pull request, and the commits around it are still looked up.
 
 ## Speed
 
