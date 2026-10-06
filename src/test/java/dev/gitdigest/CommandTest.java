@@ -9,6 +9,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -241,6 +242,52 @@ class CommandTest {
     void jobsBelowOneIsRejectedAsAUsageError() throws Exception {
         try (TestRepo repo = history()) {
             assertEquals(2, run("changelog", repo(), "--jobs", "0").exitCode());
+        }
+    }
+
+    @Test
+    void aMalformedDateIsAUsageErrorThatSaysWhatItWanted() throws Exception {
+        try (TestRepo repo = history()) {
+            for (String option : List.of("--since", "--until")) {
+                Run result = run("stats", repo(), option, "notadate");
+
+                assertEquals(2, result.exitCode(), option);
+                assertTrue(result.err().contains("expected YYYY-MM-DD"), result.err());
+                assertFalse(result.err().contains("java.time"), "no Java class names at a user: " + result.err());
+            }
+        }
+    }
+
+    @Test
+    void anImpossibleCalendarDateIsRejectedToo() throws Exception {
+        try (TestRepo repo = history()) {
+            Run result = run("stats", repo(), "--since", "2026-02-30");
+
+            assertEquals(2, result.exitCode());
+            assertTrue(result.err().contains("'2026-02-30' is not a date"), result.err());
+        }
+    }
+
+    @Test
+    void datesTheWrongWayRoundAreAUsageErrorNotAnEmptyReport() throws Exception {
+        try (TestRepo repo = history()) {
+            Run result = run("stats", repo(), "--since", "2026-10-01", "--until", "2026-09-01");
+
+            assertEquals(2, result.exitCode());
+            assertTrue(result.err().contains("--since 2026-10-01 is after --until 2026-09-01"), result.err());
+            assertTrue(result.out().isBlank(), "an empty report would read as a quiet repository: " + result.out());
+        }
+    }
+
+    @Test
+    void theSameDayForBothEndsIsAOneDayRange() throws Exception {
+        // Every commit in history() is dated TestRepo.DEFAULT_TIME, 2026-03-04.
+        try (TestRepo repo = history()) {
+            Run result = run("stats", repo(), "--since", "2026-03-04", "--until", "2026-03-04", "--format", "json");
+
+            assertEquals(0, result.exitCode(), result.err());
+            JsonNode json = new ObjectMapper().readTree(result.out());
+            assertEquals(4, json.path("totalCommits").asInt());
         }
     }
 
