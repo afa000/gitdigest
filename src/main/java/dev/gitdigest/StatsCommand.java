@@ -29,12 +29,14 @@ public class StatsCommand implements Callable<Integer> {
     @Option(
             names = "--since",
             paramLabel = "<date>",
+            converter = IsoDateConverter.class,
             description = "Only commits on or after this date, as YYYY-MM-DD.")
     LocalDate since;
 
     @Option(
             names = "--until",
             paramLabel = "<date>",
+            converter = IsoDateConverter.class,
             description = "Only commits on or before this date, as YYYY-MM-DD.")
     LocalDate until;
 
@@ -53,6 +55,12 @@ public class StatsCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         Path where = repoPath.toAbsolutePath().normalize();
+        if (since != null && until != null && since.isAfter(until)) {
+            // Nothing can match two dates the wrong way round, and an empty
+            // report would read as a quiet repository rather than as a typo.
+            System.err.println("gitdigest: --since " + since + " is after --until " + until + ".");
+            return 2;
+        }
         try {
             List<CommitInfo> commits = new RepoReader().readCommits(repoPath);
             List<CommitInfo> selected = new CommitFilter(since, until, author).apply(commits);
