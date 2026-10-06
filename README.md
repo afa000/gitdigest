@@ -230,7 +230,8 @@ plain text. `NO_COLOR` is honoured.
 
 Exit codes: `0` on success — including a repository with no commits, which is
 empty rather than broken; `1` with a one-line message on a bad path or an
-unknown revision; `2` when the arguments themselves do not parse.
+unknown revision; `2` when the arguments do not parse or do not make sense
+together, such as `--since` after `--until` or `--jobs 0`.
 
 An unexpected failure is also reported in one line rather than as a stack
 trace; set `GITDIGEST_DEBUG=1` to get the trace back.
