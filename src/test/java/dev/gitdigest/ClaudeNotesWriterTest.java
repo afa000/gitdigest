@@ -85,7 +85,7 @@ class ClaudeNotesWriterTest {
     }
 
     private static String messageStart() {
-        return messageStart("claude-opus-5");
+        return messageStart("claude-opus-5-5");
     }
 
     /** The model a message_start names is the one that will write. */
@@ -202,7 +202,9 @@ class ClaudeNotesWriterTest {
         write(new ByteArrayOutputStream());
 
         String sent = requestBody.get();
-        assertTrue(sent.contains("claude-opus-5"), "the model should be the one this class documents");
+        // Exact, with the JSON key: a bare contains("claude-opus-5") would also
+        // match claude-opus-5-5 and could not tell the two models apart.
+        assertTrue(sent.contains("\"model\":\"claude-opus-5-5\""), "the model should be the one this class documents: " + sent);
         assertTrue(sent.contains("Never invent a change"), "the system half should travel with the request");
         assertTrue(sent.contains("add pagination"), "the commits should travel with the request");
         assertTrue(sent.contains("\"stream\":true"));
@@ -225,22 +227,22 @@ class ClaudeNotesWriterTest {
     void notesFromTheRequestedModelSayWhoWroteThem() {
         respondWithStream(messageStart() + textBlockStart() + textDelta("ok") + closingEvents());
 
-        assertEquals("written by claude-opus-5", describeAfterWriting(new ByteArrayOutputStream()));
+        assertEquals("written by claude-opus-5-5", describeAfterWriting(new ByteArrayOutputStream()));
     }
 
     @Test
     void aFallbackBeforeAnyOutputCreditsTheModelThatWrote() {
         // The declined attempt happens before the stream opens, so the user
-        // sees nothing of it - but "written by claude-opus-5" would be false.
+        // sees nothing of it - but "written by claude-opus-5-5" would be false.
         respondWithStream(messageStart("claude-opus-4-8")
-                + fallbackBlock("claude-opus-5", "claude-opus-4-8")
+                + fallbackBlock("claude-opus-5-5", "claude-opus-4-8")
                 + textBlockStart() + textDelta("## Release v2.0") + closingEvents());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
 
         String writtenBy = describeAfterWriting(sink);
 
         assertEquals("## Release v2.0\n", sink.toString(StandardCharsets.UTF_8).replace("\r\n", "\n"));
-        assertEquals("written by claude-opus-4-8 (the fallback for claude-opus-5)", writtenBy);
+        assertEquals("written by claude-opus-4-8 (the fallback for claude-opus-5-5)", writtenBy);
     }
 
     @Test
@@ -250,7 +252,7 @@ class ClaudeNotesWriterTest {
         // is complete and succeeds - it just had two authors.
         respondWithStream(messageStart() + textBlockStart()
                 + textDelta("## Release v2.0") + textDelta("\\n\\nIt is")
-                + fallbackBlock("claude-opus-5", "claude-opus-4-8")
+                + fallbackBlock("claude-opus-5-5", "claude-opus-4-8")
                 + textBlockStart() + textDelta(" faster now.")
                 + closingEvents());
         ByteArrayOutputStream sink = new ByteArrayOutputStream();
@@ -259,7 +261,7 @@ class ClaudeNotesWriterTest {
 
         assertEquals("## Release v2.0\n\nIt is faster now.\n",
                 sink.toString(StandardCharsets.UTF_8).replace("\r\n", "\n"));
-        assertEquals("written by claude-opus-5, then claude-opus-4-8 (the fallback for claude-opus-5)", writtenBy);
+        assertEquals("written by claude-opus-5-5, then claude-opus-4-8 (the fallback for claude-opus-5-5)", writtenBy);
     }
 
     @Test
@@ -300,7 +302,7 @@ class ClaudeNotesWriterTest {
     void aRefusalIsNotMistakenForNotes() {
         // A refusal arrives as a perfectly healthy HTTP 200 with text in it.
         // Taken at face value it would be written to the terminal, announced
-        // as "notes written by claude-opus-5", and exit 0 - straight into
+        // as "notes written by claude-opus-5-5", and exit 0 - straight into
         // someone's RELEASE_NOTES.md. Fallbacks make this rarer, not
         // impossible: when the fallback model is rate-limited, the API returns
         // the refusal itself.
